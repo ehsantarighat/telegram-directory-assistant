@@ -90,7 +90,7 @@ export class TelegramWebSource implements IngestionSource {
         });
         if (res.status === 301 || res.status === 302 || res.status === 308) {
           throw new Error(
-            `@${input.channelUsername} doesn't expose a public web preview. The channel admin must enable it in Telegram (Channel Info → Settings → Channel Type → ☑ "Show preview"), or wire up MTProto-based ingestion for private/preview-disabled channels.`,
+            `@${input.channelUsername} has no public web preview. The channel admin must enable it in Telegram (Channel Info → Settings → "Show preview").`,
           );
         }
         if (!res.ok) {

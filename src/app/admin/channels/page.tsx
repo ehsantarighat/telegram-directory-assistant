@@ -145,17 +145,17 @@ export default async function AdminChannelsPage() {
                           </span>
                         </div>
                       ) : c.lastSyncedAt ? (
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-0.5 max-w-xs">
                           <span>{formatRelative(c.lastSyncedAt)}</span>
                           {c.lastSyncError && (
-                            <span className="text-destructive">
-                              ⚠ {c.lastSyncError.slice(0, 60)}
+                            <span className="text-destructive whitespace-normal text-pretty leading-snug">
+                              ⚠ {c.lastSyncError}
                             </span>
                           )}
                         </div>
                       ) : c.lastSyncError ? (
-                        <span className="text-destructive">
-                          ⚠ {c.lastSyncError.slice(0, 60)}
+                        <span className="text-destructive whitespace-normal text-pretty leading-snug block max-w-xs">
+                          ⚠ {c.lastSyncError}
                         </span>
                       ) : (
                         "—"
