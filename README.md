@@ -236,47 +236,60 @@ All cached rows stay valid; new rows record the new provider name.
 
 ---
 
-## Mock ingestion (Phase 10)
+## Ingestion
 
-Until the real Telegram worker lands, you can exercise the full pipeline
-end-to-end with the mock source.
+End-to-end real ingestion against any public Telegram channel.
 
-- `src/lib/ingestion/mock.ts` generates canned messages off a channel username.
-- `src/lib/ingestion/pipeline.ts` is **source-agnostic**: it fetches messages,
-  upserts `raw_telegram_posts`, runs `RealEstateExtractor` for the
-  `real-estate` category, and either materializes a new `listings` row or
-  attaches the post to an existing canonical listing via `listing_sources`
-  + bumps `source_count`.
-- `src/lib/ingestion/dedup.ts` is a signature-based dedup placeholder
-  (md5 of title+price+phone). Image hashing + LLM-similarity are a Later
-  Prompt.
-- Two entry points:
-  - CLI: `pnpm ingest:mock`
-  - UI: `/admin/channels` → **Run sync** on any channel row. Server action
-    in `src/lib/admin/ingestion-actions.ts`.
+### Source: `TelegramWebSource`
 
-Re-running is safe: the unique index on `(telegram_channel_id, telegram_message_id)`
-in `raw_telegram_posts` plus the dedup pass in `materializeListing` make
-the whole pipeline idempotent.
+`src/lib/ingestion/telegram-web.ts` scrapes `https://t.me/s/<username>`
+— Telegram's server-rendered public preview page. No auth, no Bot API,
+no MTProto. Works for any channel marked "public" in Telegram.
 
----
+- Paginates backwards via `?before=<message_id>` until either **100 posts**
+  or **6 months** is reached (whichever hits first)
+- Telegram-grouped photo albums (one logical post split across many
+  message ids) collapse naturally into a single message wrap with
+  multiple photo URLs — that's where multi-photo listings come from
+- Subsequent syncs honour `telegram_channels.last_synced_at` so only
+  new posts get processed
+- Hot-links photos from `*.telesco.pe` via `next/image` (re-hosting in
+  Supabase Storage is a later optimisation)
 
-## Future plan: real Telegram ingestion
+### Extraction: composite (LLM + regex)
 
-This is a **post-MVP Later Prompt**, intentionally not in scope. The
-swap-in shape is:
+Each scraped post is run through `CompositeRealEstateExtractor`
+(`src/lib/ingestion/extract/composite.ts`):
 
-1. Implement `IngestionSource` in `src/lib/ingestion/telegram.ts`. Most
-   likely strategy: Telegram Bot API for channels where we're added as
-   admin; Telethon-style scraper for public channels (out-of-process
-   worker on a separate Railway service, talks to the same DB).
-2. The worker process runs `ingestChannel({ source: telegramSource, ... })`
-   on a schedule (cron or Vercel Queue). Same pipeline, same idempotency.
-3. The admin "Run sync" button keeps working — it just calls the same
-   `ingestChannel` with the real source.
+1. **LLM first** — `LlmRealEstateExtractor` calls Anthropic Claude
+   Haiku via `tool_use` for strict structured output. The model reads
+   each post on its own terms (bullet template, free prose, mixed
+   RU/UZ/EN, abbreviated tags) and projects it onto our schema.
+   Enabled when `ANTHROPIC_API_KEY` is set.
+2. **Regex fallback** — `RealEstateExtractor` handles the common UZ
+   realty bullet format (`• Количество комнат:`, `• Площадь:`, `• Цена:`,
+   …) plus free-text regex. Used when the LLM is unavailable, errors,
+   times out, or returns invalid output.
 
-Schema is already shaped for it: `raw_telegram_posts` has `raw_payload_json`,
-`media_metadata`, `processing_status`, and unique `(channel_id, message_id)`.
+Re-ingestion safety in `pipeline.ts` (the `primary_raw_post_id` check)
+prevents re-charging the LLM for the same raw post on subsequent syncs.
+First successful sync pays; everything else is free.
+
+### Dedup
+
+`src/lib/ingestion/dedup.ts` is signature-based today (md5 of
+title + price + phone). Image-hash + LLM-similarity dedup is a future
+enhancement. The unique index on `(telegram_channel_id, telegram_message_id)`
+in `raw_telegram_posts` already makes the whole pipeline idempotent at
+the raw-post layer.
+
+### Entry points
+
+- **Admin UI**: `/admin/channels` → **Run sync** on any channel row.
+- **CLI (mock fixtures only)**: `pnpm ingest:mock` runs a canned source
+  through the same pipeline.
+- **Auto on channel add**: inserting a channel via the admin form
+  immediately triggers an initial backfill (100 posts / 6 months).
 
 ---
 
@@ -373,10 +386,14 @@ deploys never go out without a pre-flight check. See the env section above.
 
 ## Known limitations
 
-- **Mock ingestion only.** Listings come from `src/lib/ingestion/mock.ts`,
-  not real channels. Wire up `telegram.ts` (a Later Prompt) to ship real data.
+- **Public channels only.** `TelegramWebSource` reads `t.me/s/<username>`,
+  which only works for channels Telegram exposes as "public preview".
+  Private channels need an MTProto-based ingester (Telethon-style worker).
 - **Mock translation.** `MockTranslationProvider` returns a tagged echo.
   Real LLM is a one-file swap (see Translation section above).
+- **LLM extractor is opt-in.** Without `ANTHROPIC_API_KEY`, ingestion
+  uses the rule-based extractor only, which is good enough for the
+  common UZ realty bullet format but degrades on unstructured posts.
 - **No alerts.** Saved searches are durable; sending email/push is a Later Prompt. UI says so explicitly.
 - **No image-similarity dedup.** Signature-based dedup (md5 of title + price + phone) is a placeholder; image-hash + LLM-similarity is a Later Prompt.
 - **No rate limiting.** Auth endpoints rely on Supabase's defaults. Add CDN-level limits if you open ingestion endpoints to the public.

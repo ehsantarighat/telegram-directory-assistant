@@ -29,6 +29,8 @@ const REQUIRED_KEYS = [
 const OPTIONAL_KEYS = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "NEXT_PUBLIC_SITE_URL",
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_EXTRACTION_MODEL",
 ] as const;
 
 async function main() {

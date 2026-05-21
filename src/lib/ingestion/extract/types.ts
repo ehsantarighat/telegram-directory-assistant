@@ -50,8 +50,12 @@ export type ExtractedListing = {
 
 export interface Extractor {
   readonly name: string;
+  /**
+   * May be sync (regex) or async (LLM-backed). The pipeline always
+   * awaits the result, so both shapes are valid here.
+   */
   extract(input: {
     text: string;
     mediaUrls: string[];
-  }): ExtractedListing | null;
+  }): ExtractedListing | null | Promise<ExtractedListing | null>;
 }

@@ -10,13 +10,30 @@ import {
 } from "@/db/schema";
 
 import { findDuplicate } from "./dedup";
+import { CompositeRealEstateExtractor } from "./extract/composite";
+import { tryGetLlmExtractor } from "./extract/llm";
 import { RealEstateExtractor } from "./extract/real-estate";
-import type { ExtractedListing } from "./extract/types";
+import type { ExtractedListing, Extractor } from "./extract/types";
 import type { IngestionRawMessage, IngestionSource } from "./types";
 
-const extractors = {
-  "real-estate": new RealEstateExtractor(),
-} as const;
+/**
+ * Lazy per-category extractor cache. Built on first use so env access
+ * (which the LLM extractor needs) happens at runtime, not module-load.
+ */
+const extractorCache = new Map<string, Extractor>();
+function getExtractor(categorySlug: string): Extractor | null {
+  const cached = extractorCache.get(categorySlug);
+  if (cached) return cached;
+  if (categorySlug === "real-estate") {
+    const ext = new CompositeRealEstateExtractor(
+      tryGetLlmExtractor(),
+      new RealEstateExtractor(),
+    );
+    extractorCache.set(categorySlug, ext);
+    return ext;
+  }
+  return null;
+}
 
 export type IngestResult = {
   fetched: number;
@@ -61,14 +78,15 @@ export async function ingestChannel(opts: {
     .where(eq(categories.id, channel.categoryId))
     .limit(1);
 
-  const extractorKey =
-    cat?.slug === "real-estate" ? ("real-estate" as const) : null;
-  const extractor = extractorKey ? extractors[extractorKey] : null;
+  const extractor = cat?.slug ? getExtractor(cat.slug) : null;
   if (!extractor) {
     throw new Error(
       `No extractor wired for category ${cat?.slug ?? "(none)"} on channel ${channel.username}`,
     );
   }
+  console.log(
+    `[ingest] starting @${channel.username} using extractor=${extractor.name}`,
+  );
 
   const messages = await opts.source.fetchMessages({
     channelUsername: opts.channelUsername,
@@ -83,7 +101,7 @@ export async function ingestChannel(opts: {
 
   for (const msg of messages) {
     const rawRow = await upsertRawPost(channel.id, msg);
-    const extracted = extractor.extract({
+    const extracted = await extractor.extract({
       text: msg.text,
       mediaUrls: msg.mediaUrls,
     });

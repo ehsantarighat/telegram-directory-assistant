@@ -31,6 +31,10 @@ const serverSchema = z.object({
     .string()
     .min(1, "DATABASE_URL is required (Supabase Postgres pooled connection string)"),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+  // Optional. When set, ingestion uses Claude Haiku for LLM extraction.
+  // When unset, the pipeline falls back to the rule-based extractor.
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_EXTRACTION_MODEL: z.string().min(1).optional(),
 });
 
 const clientSchema = z.object({
@@ -59,17 +63,28 @@ export type Env = Server & Client;
 
 let cached: Env | null = null;
 
+/**
+ * Treat empty strings as undefined before validation. `.env` files written
+ * via `KEY=""` or `KEY=` produce empty strings rather than missing keys,
+ * which would otherwise fail `.min(1)` on optional vars.
+ */
+function nz(v: string | undefined): string | undefined {
+  return v && v.length > 0 ? v : undefined;
+}
+
 function getValidatedEnv(): Env {
   if (cached) return cached;
   const server = parse(serverSchema, {
     NODE_ENV: process.env.NODE_ENV,
     DATABASE_URL: process.env.DATABASE_URL,
-    SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_SERVICE_ROLE_KEY: nz(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    ANTHROPIC_API_KEY: nz(process.env.ANTHROPIC_API_KEY),
+    ANTHROPIC_EXTRACTION_MODEL: nz(process.env.ANTHROPIC_EXTRACTION_MODEL),
   });
   const client = parse(clientSchema, {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    NEXT_PUBLIC_SITE_URL: nz(process.env.NEXT_PUBLIC_SITE_URL),
   });
   cached = Object.freeze({ ...server, ...client });
   return cached;
