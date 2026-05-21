@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   ArrowRightIcon,
-  BookmarkIcon,
   Building2Icon,
   CalendarDays,
   HomeIcon,
@@ -13,10 +12,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ListingCard } from "@/components/listings/ListingCard";
+import { fetchListings } from "@/lib/listings/query";
 
 export const metadata = {
   title: "Discover Uzbekistan real estate",
 };
+
+export const dynamic = "force-dynamic";
 
 const TYPE_CHIPS = [
   {
@@ -32,7 +35,7 @@ const TYPE_CHIPS = [
     icon: HomeIcon,
   },
   {
-    href: "/listings?type=daily",
+    href: "/listings?type=daily_rent",
     label: "Daily",
     description: "Short-term and nightly stays.",
     icon: CalendarDays,
@@ -40,17 +43,19 @@ const TYPE_CHIPS = [
 ] as const;
 
 const POPULAR_CITIES = [
-  { slug: "tashkent", name: "Tashkent", caption: "Capital · most listings" },
-  { slug: "samarkand", name: "Samarkand", caption: "Historic centre" },
-  { slug: "bukhara", name: "Bukhara", caption: "Tourist-friendly" },
-  { slug: "namangan", name: "Namangan", caption: "Fergana valley" },
+  { slug: "Tashkent", name: "Tashkent", caption: "Capital · most listings" },
+  { slug: "Samarkand", name: "Samarkand", caption: "Historic centre" },
+  { slug: "Bukhara", name: "Bukhara", caption: "Tourist-friendly" },
+  { slug: "Namangan", name: "Namangan", caption: "Fergana valley" },
 ] as const;
 
-export default function HomePage() {
+export default async function HomePage() {
+  const latest = await fetchListings({ sort: "newest", limit: 6 });
+
   return (
-    <div className="flex flex-col gap-8 pb-4">
+    <div className="flex flex-col gap-10 pb-4">
       {/* Hero */}
-      <section className="relative isolate overflow-hidden border-b border-border bg-gradient-to-b from-primary/5 via-background to-background px-4 pb-10 pt-8 md:px-8 md:pb-16 md:pt-14">
+      <section className="relative isolate overflow-hidden border-b border-border bg-gradient-to-b from-primary/5 via-background to-background px-4 pb-10 pt-8 md:px-8 md:pb-14 md:pt-14">
         <div className="mx-auto flex max-w-3xl flex-col items-center gap-5 text-center">
           <Badge variant="secondary" className="gap-1.5">
             <ShieldCheckIcon className="h-3.5 w-3.5" aria-hidden />
@@ -69,7 +74,6 @@ export default function HomePage() {
             original Telegram post.
           </p>
 
-          {/* Search affordance — non-functional in Phase 1, links to /listings */}
           <Link
             href="/listings"
             className="group flex w-full max-w-xl items-center gap-3 rounded-full border border-border bg-card px-5 py-3 text-left shadow-sm transition-shadow hover:shadow"
@@ -110,8 +114,38 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Type detail */}
-      <section className="mx-auto w-full max-w-5xl px-4 md:px-8">
+      {/* Latest listings */}
+      <section className="mx-auto w-full max-w-6xl px-4 md:px-8">
+        <header className="mb-4 flex items-end justify-between">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight md:text-xl">
+              Latest listings
+            </h2>
+            <p className="text-xs text-muted-foreground md:text-sm">
+              Freshly indexed from {(latest.items[0]?.primaryChannel?.title)
+                ? "real Telegram channels"
+                : "your seed channels"}.
+            </p>
+          </div>
+          <Button
+            render={<Link href="/listings" />}
+            variant="ghost"
+            size="sm"
+            className="gap-1"
+          >
+            View all
+            <ArrowRightIcon className="h-3.5 w-3.5" aria-hidden />
+          </Button>
+        </header>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {latest.items.map((l) => (
+            <ListingCard key={l.id} listing={l} />
+          ))}
+        </div>
+      </section>
+
+      {/* Browse by type */}
+      <section className="mx-auto w-full max-w-6xl px-4 md:px-8">
         <header className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Browse by type
@@ -149,7 +183,7 @@ export default function HomePage() {
       </section>
 
       {/* Popular cities */}
-      <section className="mx-auto w-full max-w-5xl px-4 md:px-8">
+      <section className="mx-auto w-full max-w-6xl px-4 md:px-8">
         <header className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
             Popular cities
@@ -165,7 +199,7 @@ export default function HomePage() {
           {POPULAR_CITIES.map((city) => (
             <Card key={city.slug} className="group">
               <Link
-                href={`/listings?citySlug=${city.slug}`}
+                href={`/listings?city=${encodeURIComponent(city.slug)}`}
                 className="block"
               >
                 <CardContent className="flex flex-col gap-1 p-4">
@@ -185,49 +219,6 @@ export default function HomePage() {
           ))}
         </div>
       </section>
-
-      {/* Why this exists */}
-      <section className="mx-auto w-full max-w-5xl px-4 pb-6 md:px-8 md:pb-12">
-        <Card className="bg-muted/30">
-          <CardContent className="grid gap-4 p-5 md:grid-cols-3 md:p-6">
-            <Feature
-              icon={SearchIcon}
-              title="Faster search"
-              body="Listings from many Telegram channels in one place — filter, sort, and save without scrolling forever."
-            />
-            <Feature
-              icon={BookmarkIcon}
-              title="Save what matters"
-              body="Bookmark listings, set up alerts (coming in Phase 11), and revisit your shortlist anytime."
-            />
-            <Feature
-              icon={ShieldCheckIcon}
-              title="Always attributed"
-              body="Every listing links back to its source Telegram post. We index public content, not own it."
-            />
-          </CardContent>
-        </Card>
-      </section>
-    </div>
-  );
-}
-
-function Feature({
-  icon: Icon,
-  title,
-  body,
-}: {
-  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="flex flex-col gap-2">
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-background text-primary shadow-sm">
-        <Icon className="h-4 w-4" aria-hidden />
-      </span>
-      <h3 className="text-sm font-semibold">{title}</h3>
-      <p className="text-xs text-muted-foreground">{body}</p>
     </div>
   );
 }
