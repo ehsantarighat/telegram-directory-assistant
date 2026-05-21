@@ -16,7 +16,7 @@ import { ListingFactsGrid } from "@/components/listings/ListingFactsGrid";
 import { ListingMediaGallery } from "@/components/listings/ListingMediaGallery";
 import { ListingSourcesPanel } from "@/components/listings/ListingSourcesPanel";
 import { ListingTypeBadge } from "@/components/listings/ListingTypeBadge";
-import { ReportButton } from "@/components/listings/ReportButton";
+import { ReportDialog } from "@/components/listings/ReportDialog";
 import { SaveButton } from "@/components/listings/SaveButton";
 import { ShareButton } from "@/components/listings/ShareButton";
 import { TranslationBadge } from "@/components/listings/TranslationBadge";
@@ -207,6 +207,9 @@ export default async function ListingDetailPage({
                       · posted {formatRelative(listing.publishedAt)}
                     </span>
                   )}
+                  <span className="text-xs text-muted-foreground">
+                    · imported {formatRelative(listing.importedAt)}
+                  </span>
                 </div>
               </div>
 
@@ -222,7 +225,13 @@ export default async function ListingDetailPage({
                   title={listing.title}
                   variant="labeled"
                 />
-                <ReportButton listingId={listing.id} variant="labeled" />
+                <ReportDialog
+                  listingId={listing.id}
+                  channelId={listing.primarySource?.channelId ?? null}
+                  defaultName={profile?.name ?? null}
+                  defaultEmail={user?.email ?? null}
+                  variant="labeled"
+                />
                 <TranslationToggle
                   defaultLanguage={activeLang ?? "original"}
                   className="ms-auto"
