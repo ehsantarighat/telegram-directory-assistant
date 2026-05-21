@@ -5,7 +5,7 @@ import { RefreshCwIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { runMockSyncAction } from "@/lib/admin/ingestion-actions";
+import { runSyncAction } from "@/lib/admin/ingestion-actions";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -15,13 +15,13 @@ type Props = {
 };
 
 /**
- * Admin "Run sync" button. Invokes the mock ingestion pipeline for one
- * channel and surfaces { fetched, inserted, duplicates, skipped } in a
- * toast. Disabled when the channel is disabled / removed.
+ * Admin "Run sync" button. Scrapes the channel's public t.me/s/<username>
+ * page, runs the source-agnostic ingestion pipeline, and surfaces
+ * { fetched, inserted, duplicates, skipped } in a toast.
  *
- * Phase 10 always calls the mock source. When the real Telethon worker
- * ships, we'll either swap the source inside runMockSyncAction or add
- * a separate "Run real sync" entry point.
+ * Bounded to the last 100 posts (or 6 months, whichever is stricter).
+ * Subsequent runs honour the stored last_synced_at watermark so only
+ * new posts get processed.
  */
 export function SyncButton({ channelId, disabled, className }: Props) {
   const [pending, startTransition] = useTransition();
@@ -30,7 +30,7 @@ export function SyncButton({ channelId, disabled, className }: Props) {
     const fd = new FormData();
     fd.set("channelId", channelId);
     startTransition(async () => {
-      const result = await runMockSyncAction(fd);
+      const result = await runSyncAction(fd);
       if (result.ok) {
         const { fetched, inserted, duplicates, skipped } = result.result;
         const desc =
@@ -55,7 +55,7 @@ export function SyncButton({ channelId, disabled, className }: Props) {
       onClick={handleClick}
       disabled={pending || disabled}
       className={cn("gap-1.5", className)}
-      aria-label="Run mock sync for this channel"
+      aria-label="Sync this channel from Telegram"
     >
       <RefreshCwIcon
         className={cn("h-3.5 w-3.5", pending && "animate-spin")}

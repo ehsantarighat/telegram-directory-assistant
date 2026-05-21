@@ -8,6 +8,7 @@ import { db } from "@/db";
 import { categories, telegramChannels } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/requireUser";
 import { normalizeTelegramChannel } from "@/lib/channel-suggestions/normalize";
+import { runChannelSync } from "@/lib/admin/ingestion-actions";
 
 const upsertSchema = z.object({
   id: z.string().uuid().optional(),
@@ -117,8 +118,16 @@ export async function upsertChannelAction(
         updatedAt: new Date(),
       })
       .where(eq(telegramChannels.id, parsed.data.id));
-  } else {
-    await db.insert(telegramChannels).values({
+    await revalidate();
+    return { ok: true };
+  }
+
+  // Insert path → also kick off an initial backfill (last 6 months OR
+  // 100 posts) so the channel shows up on the public feed immediately,
+  // not on the admin's next "Run sync" click.
+  const [inserted] = await db
+    .insert(telegramChannels)
+    .values({
       title: parsed.data.title,
       username: normalized.username,
       url: normalized.url,
@@ -127,10 +136,27 @@ export async function upsertChannelAction(
       city: parsed.data.city || null,
       language: parsed.data.language || null,
       status: "active",
-    });
-  }
+    })
+    .returning({ id: telegramChannels.id });
 
   await revalidate();
+
+  // Inline backfill. Bounded to 100 posts / ~6 months, so the worst
+  // case is roughly the duration of one Telegram fetch + 100 DB
+  // upserts. Failures are non-fatal — the channel is still created
+  // and the admin can hit "Run sync" manually.
+  if (inserted) {
+    try {
+      await runChannelSync(inserted.id, { maxPosts: 100, maxAgeDays: 183 });
+    } catch (err) {
+      console.warn(
+        `[channel-actions] initial backfill failed for @${normalized.username}:`,
+        err,
+      );
+    }
+    await revalidate();
+  }
+
   return { ok: true };
 }
 

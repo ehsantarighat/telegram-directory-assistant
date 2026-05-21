@@ -8,7 +8,7 @@ import { db } from "@/db";
 import { telegramChannels } from "@/db/schema";
 import { requireAdmin } from "@/lib/auth/requireUser";
 import { ingestChannel, type IngestResult } from "@/lib/ingestion/pipeline";
-import { MockIngestionSource } from "@/lib/ingestion/mock";
+import { TelegramWebSource } from "@/lib/ingestion/telegram-web";
 
 const schema = z.object({
   channelId: z.string().uuid(),
@@ -19,17 +19,18 @@ export type SyncActionState =
   | { ok: false; error: string };
 
 /**
- * Admin "Run mock sync" entry point. Wraps the source-agnostic
- * ingestChannel pipeline with the MockIngestionSource.
+ * Admin "Run sync" entry point. Wraps the source-agnostic ingestChannel
+ * pipeline with the live TelegramWebSource (scrapes the channel's public
+ * t.me/s/<username> page).
  *
- * Replace MockIngestionSource with TelegramIngestionSource when the
- * real Telethon worker lands — the pipeline, dedup, and admin UI stay
- * exactly the same.
+ * Bounds: at most the last 100 posts, never older than 6 months. Both
+ * limits enforced inside TelegramWebSource. Subsequent runs honour the
+ * stored last_synced_at watermark, so re-syncs only pick up new posts.
  *
- * Stamps lastSyncStatus + lastSyncError on failure so the admin
- * channels table can render the latest run's outcome inline.
+ * Stamps lastSyncStatus + lastSyncError on failure so the admin channels
+ * table renders the latest run's outcome inline.
  */
-export async function runMockSyncAction(
+export async function runSyncAction(
   formData: FormData,
 ): Promise<SyncActionState> {
   await requireAdmin();
@@ -37,6 +38,20 @@ export async function runMockSyncAction(
   const parsed = schema.safeParse({ channelId: formData.get("channelId") });
   if (!parsed.success) return { ok: false, error: "Invalid request" };
 
+  return runChannelSync(parsed.data.channelId);
+}
+
+/** Back-compat alias for any existing callsites still using the old name. */
+export const runMockSyncAction = runSyncAction;
+
+/**
+ * Internal helper used by both the admin "Run sync" button and the
+ * channel-add flow. Returns the same SyncActionState shape.
+ */
+export async function runChannelSync(
+  channelId: string,
+  opts: { maxPosts?: number; maxAgeDays?: number } = {},
+): Promise<SyncActionState> {
   const [channel] = await db
     .select({
       id: telegramChannels.id,
@@ -44,7 +59,7 @@ export async function runMockSyncAction(
       status: telegramChannels.status,
     })
     .from(telegramChannels)
-    .where(eq(telegramChannels.id, parsed.data.channelId))
+    .where(eq(telegramChannels.id, channelId))
     .limit(1);
 
   if (!channel) return { ok: false, error: "Channel not found" };
@@ -55,18 +70,23 @@ export async function runMockSyncAction(
     };
   }
 
-  const source = new MockIngestionSource();
+  const source = new TelegramWebSource({
+    maxPosts: opts.maxPosts ?? 100,
+    maxAgeDays: opts.maxAgeDays ?? 183,
+  });
 
   try {
     const result = await ingestChannel({
       source,
       channelUsername: channel.username,
+      limit: opts.maxPosts ?? 100,
     });
 
     revalidatePath("/admin");
     revalidatePath("/admin/channels");
     revalidatePath("/admin/listings");
     revalidatePath("/listings");
+    revalidatePath("/");
 
     return { ok: true, result, channelUsername: channel.username };
   } catch (err) {
