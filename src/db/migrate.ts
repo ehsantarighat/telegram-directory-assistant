@@ -13,7 +13,11 @@ async function main() {
     );
   }
 
-  const client = postgres(url, { max: 1, prepare: false });
+  const client = postgres(url, {
+    max: 1,
+    prepare: false,
+    ssl: { rejectUnauthorized: false },
+  });
   const db = drizzle(client);
 
   console.log("Running migrations...");
