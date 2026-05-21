@@ -8,6 +8,7 @@ import {
   Radio,
   ScrollText,
   Settings2,
+  ShieldCheckIcon,
   UserIcon,
 } from "lucide-react";
 
@@ -48,6 +49,7 @@ export const ADMIN_NAV: NavItem[] = [
     label: "Removal requests",
     icon: Megaphone,
   },
+  { href: "/admin/team", label: "Team", icon: ShieldCheckIcon },
 ];
 
 export const ADMIN_SECONDARY_NAV: NavItem[] = [
