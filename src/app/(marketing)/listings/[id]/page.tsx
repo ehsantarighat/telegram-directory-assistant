@@ -19,38 +19,60 @@ import { ListingTypeBadge } from "@/components/listings/ListingTypeBadge";
 import { ReportButton } from "@/components/listings/ReportButton";
 import { SaveButton } from "@/components/listings/SaveButton";
 import { ShareButton } from "@/components/listings/ShareButton";
+import { TranslationBadge } from "@/components/listings/TranslationBadge";
 import { TranslationToggle } from "@/components/listings/TranslationToggle";
 import { formatRelative } from "@/lib/format/date";
 import { formatLocation, propertyTypeLabel } from "@/lib/format/listing";
 import { formatPrice, priceSuffix } from "@/lib/format/price";
+import { getProfile } from "@/lib/auth/getProfile";
 import { getUser } from "@/lib/auth/getUser";
 import { fetchListingById } from "@/lib/listings/query";
 import { isListingSaved } from "@/lib/listings/saved";
+import { translateListing } from "@/lib/translation";
+import type { TargetLanguage } from "@/lib/translation/types";
 
 export const dynamic = "force-dynamic";
 
+const SUPPORTED_LANGS = new Set<TargetLanguage>(["en", "ru", "fa"]);
+
+function parseLang(input: unknown): TargetLanguage | null {
+  if (typeof input !== "string") return null;
+  return SUPPORTED_LANGS.has(input as TargetLanguage)
+    ? (input as TargetLanguage)
+    : null;
+}
+
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ lang?: string }>;
 }) {
-  const { id } = await params;
+  const [{ id }, { lang }] = await Promise.all([params, searchParams]);
   const listing = await fetchListingById(id).catch(() => null);
   if (!listing) return { title: "Listing not found" };
-  return {
-    title: listing.title,
-    description: listing.summary ?? undefined,
-  };
+
+  let displayTitle = listing.title;
+  let displaySummary = listing.summary ?? undefined;
+  const target = parseLang(lang);
+  if (target) {
+    const t = await translateListing({ listingId: listing.id, language: target });
+    if (t?.title) displayTitle = t.title;
+    if (t?.summary) displaySummary = t.summary;
+  }
+  return { title: displayTitle, description: displaySummary };
 }
 
 export default async function ListingDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ lang?: string }>;
 }) {
-  const { id } = await params;
+  const [{ id }, { lang }] = await Promise.all([params, searchParams]);
 
-  // Validate UUID shape — short-circuit to 404 if it doesn't look like one
   if (!/^[0-9a-fA-F-]{32,36}$/.test(id)) notFound();
 
   const [listing, user] = await Promise.all([
@@ -58,7 +80,41 @@ export default async function ListingDetailPage({
     getUser(),
   ]);
   if (!listing) notFound();
-  const initialSaved = user ? await isListingSaved(user.id, listing.id) : false;
+
+  const [initialSaved, profile] = await Promise.all([
+    user ? isListingSaved(user.id, listing.id) : Promise.resolve(false),
+    user ? getProfile(user.id) : Promise.resolve(null),
+  ]);
+
+  // Resolve the active language:
+  //   1. ?lang= in the URL (explicit)
+  //   2. If absent AND user has preferredContentMode='translated' AND
+  //      preferred_language is a supported target AND the listing is in
+  //      a different language → use that
+  //   3. Otherwise show original (lang=null)
+  let activeLang: TargetLanguage | null = parseLang(lang);
+  if (!activeLang && profile?.preferredContentMode === "translated") {
+    const pref = profile.preferredLanguage;
+    if (
+      (pref === "en" || pref === "ru" || pref === "fa") &&
+      listing.detectedLanguage !== pref
+    ) {
+      activeLang = pref;
+    }
+  }
+
+  const translation = activeLang
+    ? await translateListing({
+        listingId: listing.id,
+        language: activeLang,
+      })
+    : null;
+
+  const displayTitle = translation?.title ?? listing.title;
+  const displayOriginalText =
+    translation?.text ?? listing.originalText;
+  const displayDirection = translation?.direction ?? "ltr";
+  const isTranslated = !!translation;
 
   const price = formatPrice(listing.price, listing.currency, {
     suffix: priceSuffix(listing.listingType),
@@ -71,7 +127,6 @@ export default async function ListingDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-5 md:px-8 md:py-8">
-      {/* Back link */}
       <Button
         render={<Link href="/listings" />}
         variant="ghost"
@@ -83,14 +138,12 @@ export default async function ListingDetailPage({
       </Button>
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-        {/* Left column: media + facts + original text */}
         <div className="flex flex-col gap-5">
           <ListingMediaGallery
             images={listing.mediaUrls}
             alt={listing.title}
           />
 
-          {/* Header card */}
           <Card className="p-4 md:p-5">
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -110,19 +163,37 @@ export default async function ListingDetailPage({
                   </Badge>
                 )}
               </div>
-              <div className="flex flex-col gap-1">
+
+              {isTranslated && activeLang && (
+                <TranslationBadge
+                  language={activeLang}
+                  provider={translation!.provider}
+                  originalHref={`/listings/${listing.id}`}
+                />
+              )}
+
+              <div
+                className="flex flex-col gap-1"
+                dir={displayDirection}
+              >
                 <h1 className="text-2xl font-semibold leading-tight tracking-tight md:text-3xl">
-                  {listing.title}
+                  {displayTitle}
                 </h1>
                 {location && (
-                  <p className="inline-flex items-center gap-1 text-sm text-muted-foreground">
+                  <p
+                    className="inline-flex items-center gap-1 text-sm text-muted-foreground"
+                    dir="ltr"
+                  >
                     <MapPinIcon className="h-4 w-4" aria-hidden />
                     {location}
                   </p>
                 )}
               </div>
+
               <div className="flex flex-wrap items-baseline justify-between gap-3">
-                <p className="text-3xl font-semibold text-primary">{price}</p>
+                <p className="text-3xl font-semibold text-primary" dir="ltr">
+                  {price}
+                </p>
                 <div className="flex flex-wrap items-center gap-2">
                   {listing.savedCount > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
@@ -137,6 +208,7 @@ export default async function ListingDetailPage({
                   )}
                 </div>
               </div>
+
               <div className="-mx-1 mt-1 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
                 <SaveButton
                   listingId={listing.id}
@@ -151,7 +223,7 @@ export default async function ListingDetailPage({
                 />
                 <ReportButton listingId={listing.id} variant="labeled" />
                 <TranslationToggle
-                  listingId={listing.id}
+                  defaultLanguage={activeLang ?? "original"}
                   className="ms-auto"
                 />
               </div>
@@ -160,24 +232,32 @@ export default async function ListingDetailPage({
 
           <ListingFactsGrid listing={listing} />
 
-          {listing.originalText && (
+          {displayOriginalText && (
             <Card className="p-4 md:p-5">
               <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-                Original post
-                {listing.detectedLanguage && (
+                {isTranslated ? "Translated post" : "Original post"}
+                {isTranslated ? (
                   <span className="ms-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal uppercase text-muted-foreground">
-                    {listing.detectedLanguage}
+                    {activeLang}
                   </span>
+                ) : (
+                  listing.detectedLanguage && (
+                    <span className="ms-2 rounded bg-muted px-1.5 py-0.5 text-[10px] font-normal uppercase text-muted-foreground">
+                      {listing.detectedLanguage}
+                    </span>
+                  )
                 )}
               </h3>
-              <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">
-                {listing.originalText}
+              <p
+                className="whitespace-pre-line text-sm leading-relaxed text-foreground"
+                dir={displayDirection}
+              >
+                {displayOriginalText}
               </p>
             </Card>
           )}
         </div>
 
-        {/* Right column: sources + contact + meta */}
         <aside className="flex flex-col gap-4 lg:sticky lg:top-20 lg:self-start">
           <ListingSourcesPanel
             primary={listing.primarySource}

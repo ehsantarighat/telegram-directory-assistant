@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useTransition } from "react";
 import { LanguagesIcon } from "lucide-react";
-import { toast } from "sonner";
 
 import {
   Select,
@@ -23,42 +23,60 @@ const LABELS: Record<Lang, string> = {
 };
 
 type Props = {
-  listingId: string;
   defaultLanguage?: Lang;
   className?: string;
 };
 
 /**
- * Phase 6 placeholder. Shows a language picker but doesn't yet trigger
- * the cached / on-demand translation flow — that lands in Phase 6 with
- * listing_translations cache lookups and the rtl renderer.
+ * URL-driven language picker for the listing detail page.
+ *
+ * Writes `?lang=en|ru|fa` to the URL. The detail server component reads
+ * it, calls translateListing(), and renders the translated body. No
+ * client-side fetch needed — the page server-renders the right content
+ * on each navigation.
+ *
+ * `original` clears the param so the page renders the source-language
+ * text.
  */
 export function TranslationToggle({
-  listingId,
-  defaultLanguage = "original",
+  defaultLanguage,
   className,
 }: Props) {
-  const [lang, setLang] = useState<Lang>(defaultLanguage);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [pending, startTransition] = useTransition();
+
+  const current = ((): Lang => {
+    const v = searchParams.get("lang");
+    if (v === "en" || v === "ru" || v === "fa") return v;
+    return defaultLanguage ?? "original";
+  })();
 
   const handleChange = (value: string | null) => {
     const next = (value ?? "original") as Lang;
-    setLang(next);
-    if (next !== "original") {
-      toast("Translation cache coming in Phase 6", {
-        description: `Will show this listing in ${LABELS[next]}.`,
-      });
-    }
-    void listingId;
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "original") params.delete("lang");
+    else params.set("lang", next);
+    startTransition(() => {
+      router.replace(`?${params.toString()}`, { scroll: false });
+    });
   };
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
       <LanguagesIcon
-        className="h-4 w-4 text-muted-foreground"
+        className={cn(
+          "h-4 w-4 text-muted-foreground",
+          pending && "animate-pulse",
+        )}
         aria-hidden
       />
-      <Select value={lang} onValueChange={handleChange}>
-        <SelectTrigger size="sm" className="w-[170px]">
+      <Select value={current} onValueChange={handleChange}>
+        <SelectTrigger
+          size="sm"
+          className="w-[170px]"
+          aria-label="Translate this listing"
+        >
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
