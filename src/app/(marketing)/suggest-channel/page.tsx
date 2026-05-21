@@ -1,74 +1,67 @@
 import { Lightbulb } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { PageSection } from "@/components/states/PageSection";
+import { requireUser } from "@/lib/auth/requireUser";
+import {
+  fetchActiveCategories,
+  fetchUserSuggestions,
+} from "@/lib/channel-suggestions/queries";
+
+import { ChannelSuggestionForm } from "./ChannelSuggestionForm";
+import { SuggestionList } from "./SuggestionList";
 
 export const metadata = {
   title: "Suggest a channel",
 };
 
-export default function SuggestChannelPage() {
+export const dynamic = "force-dynamic";
+
+export default async function SuggestChannelPage() {
+  const { user } = await requireUser("/suggest-channel");
+
+  const [categories, suggestions] = await Promise.all([
+    fetchActiveCategories(),
+    fetchUserSuggestions(user.id),
+  ]);
+
   return (
     <PageSection
-      phase="Phase 1 · Placeholder"
       title="Suggest a Telegram channel"
-      description="Know a public real estate channel we should ingest? Submit it and an admin will review. Submission flow lands in Phase 7 — the form below is preview-only."
+      description="Know a public real estate channel we should ingest? Submit it and an admin will review."
     >
-      <Card>
-        <CardHeader className="flex flex-row items-center gap-3">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <Lightbulb className="h-4 w-4" />
-          </span>
-          <div className="flex flex-col">
-            <CardTitle className="text-base">Preview</CardTitle>
-            <span className="text-xs text-muted-foreground">
-              Not yet wired to the database
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Lightbulb className="h-4 w-4" />
             </span>
-          </div>
-          <Badge variant="secondary" className="ml-auto">
-            Phase 7
-          </Badge>
-        </CardHeader>
-        <CardContent>
-          <form className="grid gap-4">
-            <div className="grid gap-1.5">
-              <label
-                htmlFor="channel-url"
-                className="text-sm font-medium"
-              >
-                Telegram channel URL or @username
-              </label>
-              <Input
-                id="channel-url"
-                placeholder="https://t.me/uz_realty_tashkent"
-                disabled
-              />
+            <div className="flex flex-col">
+              <CardTitle className="text-base">New suggestion</CardTitle>
+              <span className="text-xs text-muted-foreground">
+                Public channels only — we can&apos;t ingest private ones.
+              </span>
             </div>
-            <div className="grid gap-1.5">
-              <label htmlFor="city" className="text-sm font-medium">
-                Suggested city
-              </label>
-              <Input id="city" placeholder="Tashkent" disabled />
-            </div>
-            <div className="grid gap-1.5">
-              <label htmlFor="note" className="text-sm font-medium">
-                Note (optional)
-              </label>
-              <Input
-                id="note"
-                placeholder="What kind of listings does this channel post?"
-                disabled
-              />
-            </div>
-            <Button type="button" disabled>
-              Submit suggestion
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            <ChannelSuggestionForm categories={categories} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Your suggestions
+              <span className="ms-1 font-normal text-muted-foreground">
+                · {suggestions.length}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SuggestionList items={suggestions} />
+          </CardContent>
+        </Card>
+      </div>
     </PageSection>
   );
 }
