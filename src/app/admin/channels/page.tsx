@@ -112,7 +112,12 @@ export default async function AdminChannelsPage() {
                       {[c.city, c.country].filter(Boolean).join(", ") || "—"}
                     </td>
                     <td className="px-4 py-3 tabular-nums">
-                      {c.postsImportedCount.toLocaleString()}
+                      <div className="flex flex-col">
+                        <span>{c.rawPostsCount.toLocaleString()}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {c.listingsCount.toLocaleString()} listings
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">
                       {c.lastSyncStatus === "running" ? (

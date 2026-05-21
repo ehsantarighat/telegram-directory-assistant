@@ -170,13 +170,19 @@ export async function ingestChannel(opts: {
   // publish time — that was a semantic bug). The watermark for the
   // NEXT sync's incremental fetch is derived from raw_telegram_posts
   // at the top of this function, not stored here.
+  //
+  // Note: we no longer write postsImportedCount. The dashboard and
+  // channels table both derive post counts from
+  //   count(*) from raw_telegram_posts where channel_id = X
+  // which is impossible to inflate (unique index on
+  // channel_id + message_id). The stored accumulator was prone to
+  // drift across re-syncs and the resurrect flow.
   await db
     .update(telegramChannels)
     .set({
       lastSyncedAt: new Date(),
       lastSyncStatus: "ok",
       lastSyncError: null,
-      postsImportedCount: channel.postsImportedCount + inserted + duplicates,
       updatedAt: new Date(),
     })
     .where(eq(telegramChannels.id, channel.id));

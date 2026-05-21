@@ -1,14 +1,21 @@
-import { desc, eq, ne } from "drizzle-orm";
+import { desc, eq, ne, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
   categories,
+  listingSources,
+  listings,
+  rawTelegramPosts,
   telegramChannels,
   type TelegramChannel,
 } from "@/db/schema";
 
 export type AdminChannel = TelegramChannel & {
   categoryName: string | null;
+  /** Real Telegram-post count from raw_telegram_posts (not the drifting accumulator on the channel row). */
+  rawPostsCount: number;
+  /** Distinct active listings where this channel is a source. */
+  listingsCount: number;
 };
 
 /**
@@ -44,9 +51,51 @@ export async function fetchAdminChannels(opts: {
     )
     .orderBy(desc(telegramChannels.createdAt));
 
+  if (rows.length === 0) return [];
+
+  // Batch two aggregate queries: raw posts per channel, and distinct
+  // active listings per channel via listing_sources. Avoids the stored
+  // posts_imported_count accumulator which can drift across re-syncs
+  // and the resurrect flow.
+  const channelIds = rows.map((r) => r.channel.id);
+  const [postsRows, listingRows] = await Promise.all([
+    db
+      .select({
+        channelId: rawTelegramPosts.telegramChannelId,
+        n: sql<number>`count(*)::int`,
+      })
+      .from(rawTelegramPosts)
+      .where(
+        sql`${rawTelegramPosts.telegramChannelId} = any(${channelIds}::uuid[])`,
+      )
+      .groupBy(rawTelegramPosts.telegramChannelId),
+    db
+      .select({
+        channelId: listingSources.telegramChannelId,
+        n: sql<number>`count(distinct ${listingSources.listingId})::int`,
+      })
+      .from(listingSources)
+      .innerJoin(listings, eq(listings.id, listingSources.listingId))
+      .where(
+        sql`${listingSources.telegramChannelId} = any(${channelIds}::uuid[]) and ${listings.status} = 'active'`,
+      )
+      .groupBy(listingSources.telegramChannelId),
+  ]);
+
+  const postsByChannel = new Map(postsRows.map((r) => [r.channelId, r.n]));
+  const listingsByChannel = new Map(
+    listingRows.map((r) => [r.channelId, r.n]),
+  );
+
   const staleCutoff = new Date(Date.now() - STALE_SYNC_MINUTES * 60_000);
   return rows.map((r) => {
     const ch = r.channel;
+    const base: AdminChannel = {
+      ...ch,
+      categoryName: r.categoryName,
+      rawPostsCount: postsByChannel.get(ch.id) ?? 0,
+      listingsCount: listingsByChannel.get(ch.id) ?? 0,
+    };
     // Detect stalled syncs at read time. We don't write back — that
     // would race with a sync that's actually still alive. UI uses
     // these computed fields for display only.
@@ -56,12 +105,11 @@ export async function fetchAdminChannels(opts: {
       ch.updatedAt < staleCutoff
     ) {
       return {
-        ...ch,
-        categoryName: r.categoryName,
+        ...base,
         lastSyncStatus: "stalled",
         lastSyncError: `No progress since ${ch.updatedAt.toISOString()} — click Run sync to retry`,
       };
     }
-    return { ...ch, categoryName: r.categoryName };
+    return base;
   });
 }

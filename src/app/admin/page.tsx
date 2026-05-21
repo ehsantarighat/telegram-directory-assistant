@@ -198,7 +198,7 @@ export default async function AdminOverviewPage() {
                         <span className="text-sm font-semibold text-foreground">
                           {c.listingCount} listings
                         </span>
-                        <span>{c.postsImportedCount.toLocaleString()} posts</span>
+                        <span>{c.postsCount.toLocaleString()} posts</span>
                       </div>
                     </li>
                   ))}

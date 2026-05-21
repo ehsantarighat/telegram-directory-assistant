@@ -5,6 +5,7 @@ import {
   channelSuggestions,
   listingSources,
   listings,
+  rawTelegramPosts,
   removalRequests,
   savedListings,
   telegramChannels,
@@ -30,8 +31,10 @@ export type AdminOverviewStats = {
     id: string;
     username: string;
     title: string;
+    /** Distinct active listings where this channel is a source. */
     listingCount: number;
-    postsImportedCount: number;
+    /** Distinct Telegram posts (raw_telegram_posts) for this channel. */
+    postsCount: number;
   }>;
 };
 
@@ -60,12 +63,25 @@ export async function fetchOverviewStats(): Promise<AdminOverviewStats> {
       .from(telegramChannels)
       .where(eq(telegramChannels.status, "active"))
       .then((r) => r[0]?.n ?? 0),
+    // Public-feed-correct listings count: only listings whose primary
+    // source channel is still active. This matches what visitors see
+    // on /listings — listings from removed channels stay in the DB for
+    // attribution but no longer appear on the public feed (filter is
+    // applied in fetchListings) so we shouldn't count them here either.
     db
       .select({
-        total: sql<number>`count(*)::int`,
-        active: sql<number>`count(*) filter (where ${listings.status} = 'active')::int`,
+        total: sql<number>`count(distinct ${listings.id})::int`,
+        active: sql<number>`count(distinct ${listings.id}) filter (where ${listings.status} = 'active' and ${telegramChannels.status} = 'active')::int`,
       })
       .from(listings)
+      .leftJoin(
+        listingSources,
+        eq(listingSources.listingId, listings.id),
+      )
+      .leftJoin(
+        telegramChannels,
+        eq(telegramChannels.id, listingSources.telegramChannelId),
+      )
       .then((r) => r[0] ?? { total: 0, active: 0 }),
     db
       .select({ n: sql<number>`count(*)::int` })
@@ -93,20 +109,36 @@ export async function fetchOverviewStats(): Promise<AdminOverviewStats> {
       .where(eq(listings.status, "active"))
       .orderBy(desc(listings.savedCount), desc(listings.publishedAt))
       .limit(5),
+    // Most-active channels picked by the REAL post count (raw_telegram_posts)
+    // not the stored accumulator. The accumulator drifts: every sync added
+    // `inserted + duplicates` to the field, so re-syncs and resurrect flows
+    // could over- or under-count. The raw_telegram_posts table is the
+    // source of truth — one row per Telegram message (unique on
+    // channel_id + message_id), so this number is impossible to inflate.
     db
       .select({
         id: telegramChannels.id,
         username: telegramChannels.username,
         title: telegramChannels.title,
-        postsImportedCount: telegramChannels.postsImportedCount,
+        postsCount: sql<number>`count(distinct ${rawTelegramPosts.id})::int`,
       })
       .from(telegramChannels)
+      .leftJoin(
+        rawTelegramPosts,
+        eq(rawTelegramPosts.telegramChannelId, telegramChannels.id),
+      )
       .where(eq(telegramChannels.status, "active"))
-      .orderBy(desc(telegramChannels.postsImportedCount))
+      .groupBy(
+        telegramChannels.id,
+        telegramChannels.username,
+        telegramChannels.title,
+      )
+      .orderBy(sql`count(distinct ${rawTelegramPosts.id}) desc`)
       .limit(5),
   ]);
 
-  // Per-channel active-listing counts via listing_sources, batched in one query
+  // Per-channel listing counts via listing_sources, batched in one query.
+  // Counts distinct active listings where this channel is one of the sources.
   const topChannelIds = mostActiveChannels.map((c) => c.id);
   const listingCountsByChannel = new Map<string, number>();
   if (topChannelIds.length > 0) {
@@ -143,7 +175,7 @@ export async function fetchOverviewStats(): Promise<AdminOverviewStats> {
       id: c.id,
       username: c.username,
       title: c.title,
-      postsImportedCount: c.postsImportedCount,
+      postsCount: c.postsCount,
       listingCount: listingCountsByChannel.get(c.id) ?? 0,
     })),
   };
