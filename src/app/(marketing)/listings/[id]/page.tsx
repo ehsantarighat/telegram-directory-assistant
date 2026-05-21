@@ -175,6 +175,7 @@ export default async function ListingDetailPage({
               <div
                 className="flex flex-col gap-1"
                 dir={displayDirection}
+                lang={activeLang ?? undefined}
               >
                 <h1 className="text-2xl font-semibold leading-tight tracking-tight md:text-3xl">
                   {displayTitle}
@@ -251,6 +252,7 @@ export default async function ListingDetailPage({
               <p
                 className="whitespace-pre-line text-sm leading-relaxed text-foreground"
                 dir={displayDirection}
+                lang={activeLang ?? listing.detectedLanguage ?? undefined}
               >
                 {displayOriginalText}
               </p>

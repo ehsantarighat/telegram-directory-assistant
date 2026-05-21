@@ -127,4 +127,24 @@
   html {
     @apply font-sans;
   }
+
+  /*
+   * Vazirmatn for Persian / Arabic / RTL content.
+   *
+   * Matches:
+   *   - Any element rendered with dir="rtl" (Persian-translated content
+   *     on the listing detail page sets this)
+   *   - lang="fa" / lang="ar" — explicit language hints, useful for
+   *     inline snippets and future Arabic-script verticals
+   *
+   * Falls back through the Latin stack so mixed-script text (e.g. UZS
+   * prices inside a Persian description) still has a usable glyph if
+   * Vazirmatn lacks the codepoint.
+   */
+  [dir="rtl"],
+  [lang="fa"],
+  [lang="ar"] {
+    font-family: var(--font-vazirmatn), var(--font-sans), system-ui,
+      -apple-system, "Segoe UI", sans-serif;
+  }
 }
