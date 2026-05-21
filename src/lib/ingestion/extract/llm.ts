@@ -150,20 +150,46 @@ const RESPONSE_SCHEMA = {
   ],
 } as const;
 
-const SYSTEM_PROMPT = `You extract structured real-estate listing data from Telegram posts.
+function buildSystemPrompt(channelContext?: string): string {
+  return `You extract structured real-estate listing data from Telegram posts.
 
-The posts come from public UZ (Uzbekistan) real-estate channels — primarily Tashkent rentals and sales. They are written in Russian, Uzbek (Latin or Cyrillic), or English, in formats ranging from neat bullet templates to free prose. Each post describes ONE listing.
+The posts come from public UZ (Uzbekistan) real-estate channels — primarily Tashkent rentals and sales. They are written in Russian, Uzbek (Latin or Cyrillic), or English, in formats ranging from neat bullet templates to free prose. Each post describes ONE listing.${
+    channelContext
+      ? `
+
+Channel context: ${channelContext}`
+      : ""
+  }
 
 Rules:
 1. Read the post on its own terms. Don't assume any particular format.
 2. Use null (or omit) for any field that isn't clearly stated.
-3. Currency markers: $, у.е, у.е., USD, долл → USD. сум, сўм, so'm, UZS → UZS.
-4. Normalize Tashkent district names to their canonical Latin form (Mirzo-Ulug'bek, Yunusobod, Yashnobod, Yakkasaray, Mirobod, Shayxontohur, Chilonzor, Sergeli, Olmazor, Bektemir, Uchtepa). Keep neighborhoods in their original script.
-5. For phones, always emit E.164 (+998…). Strip whitespace, parentheses, dashes.
-6. Title should be concise and informative — typically rooms · area · district.
-7. If the post is clearly NOT a real-estate listing (channel ad, congratulation, off-topic), still extract what you can but set title to something sensible.
+
+LISTING TYPE — this is the most error-prone field, read carefully:
+- "rent" = monthly long-term rental. Strong signals: "аренда", "сдается", "снять", "ijara", presence of a "Условия" (terms) line with "Депозит" / "предоплата", a phone-driven contact, monthly prices typically in the $200–$3000 range. Channel usernames containing "arenda" / "ijara" / "rent" mean THE ENTIRE CHANNEL is rentals.
+- "sale" = for sale. Strong signals: "продается", "продажа", "sotuv", "sotil", "sotaman", much larger prices (typically $30,000+).
+- "daily_rent" = nightly / по сутки. Strong signals: "посуточно", "сутки", "per night", "kunlik".
+- IMPORTANT: "Вторичка" (secondary market) and "Новостройка" (new build / ЖК) describe the BUILDING AGE, NOT the listing type. Do not infer "sale" from "Вторичка" alone. Use the rent/sale/daily signals above plus the channel context to decide.
+- When still unclear, default to "rent" — most UZ directory channels are rentals.
+
+CURRENCY:
+- $, у.е, у.е., USD, долл → USD
+- сум, сўм, so'm, UZS → UZS
+
+LOCATION:
+- Normalize Tashkent district names to canonical Latin form: Mirzo-Ulug'bek, Yunusobod, Yashnobod, Yakkasaray, Mirobod, Shayxontohur, Chilonzor, Sergeli, Olmazor, Bektemir, Uchtepa.
+- Keep neighborhoods in their original script (Cyrillic or Latin as written).
+
+PHONES:
+- Always emit E.164 with +998 country code. Strip whitespace, parentheses, dashes.
+
+TITLE:
+- Concise and informative. Prefer "{rooms}-room · {area} m² · {district}" style.
+
+If the post is clearly NOT a real-estate listing (channel ad, congratulation, off-topic), still extract what you can but title it sensibly and leave structural fields null.
 
 You MUST respond by calling the extract_listing tool. Do not respond with text.`;
+}
 
 const llmOutputSchema = z.object({
   listing_type: z.enum(LISTING_TYPES),
@@ -198,12 +224,13 @@ export class LlmRealEstateExtractor implements Extractor {
   async extract(input: {
     text: string;
     mediaUrls: string[];
+    channelContext?: string;
   }): Promise<ExtractedListing | null> {
     const text = input.text.trim();
     if (!text) return null;
 
     try {
-      const parsed = await this.callAnthropic(text);
+      const parsed = await this.callAnthropic(text, input.channelContext);
       if (!parsed) return null;
       return shapeForPipeline(parsed, text);
     } catch (err) {
@@ -219,7 +246,10 @@ export class LlmRealEstateExtractor implements Extractor {
   /** isSync is true only when the result was synchronously available (cache).
    *  We don't currently cache; this is here for symmetry with the translation
    *  abstraction in case we add an extracted_json cache column later. */
-  private async callAnthropic(text: string): Promise<LlmOutput | null> {
+  private async callAnthropic(
+    text: string,
+    channelContext?: string,
+  ): Promise<LlmOutput | null> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
@@ -234,7 +264,7 @@ export class LlmRealEstateExtractor implements Extractor {
         body: JSON.stringify({
           model: this.model,
           max_tokens: 1024,
-          system: SYSTEM_PROMPT,
+          system: buildSystemPrompt(channelContext),
           tools: [
             {
               name: "extract_listing",

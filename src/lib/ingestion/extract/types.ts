@@ -53,9 +53,15 @@ export interface Extractor {
   /**
    * May be sync (regex) or async (LLM-backed). The pipeline always
    * awaits the result, so both shapes are valid here.
+   *
+   * `channelContext` is an optional free-text hint about the channel
+   * (e.g. "@manorpremium_arenda — Manor Premium Arenda (rentals)").
+   * LLM extractors use it to bias ambiguous classifications; rule-based
+   * extractors ignore it.
    */
   extract(input: {
     text: string;
     mediaUrls: string[];
+    channelContext?: string;
   }): ExtractedListing | null | Promise<ExtractedListing | null>;
 }

@@ -94,6 +94,12 @@ export async function ingestChannel(opts: {
     limit: opts.limit,
   });
 
+  // Pre-build the channel hint we pass to the LLM extractor. Embeds the
+  // username and the human-readable title so the model can infer from
+  // names like "@manorpremium_arenda" that the entire channel is rentals,
+  // not sales.
+  const channelContext = buildChannelContext(channel.username, channel.title);
+
   let inserted = 0;
   let duplicates = 0;
   let skipped = 0;
@@ -104,6 +110,7 @@ export async function ingestChannel(opts: {
     const extracted = await extractor.extract({
       text: msg.text,
       mediaUrls: msg.mediaUrls,
+      channelContext,
     });
     if (!extracted) {
       await db
@@ -288,4 +295,23 @@ async function materializeListing(input: {
     .where(eq(rawTelegramPosts.id, input.rawPostId));
 
   return "new";
+}
+
+/**
+ * Build a one-line hint string the LLM extractor can use to bias
+ * ambiguous classifications. Includes the username (often the most
+ * informative signal — `*_arenda` = rentals, `*_sotuv` = sales) and
+ * the human-readable title.
+ */
+function buildChannelContext(username: string, title: string): string {
+  const u = username.toLowerCase();
+  const hints: string[] = [];
+  if (/(arenda|ijara|rent)/.test(u))
+    hints.push("rental-focused (every post is a long-term rental)");
+  if (/(sotuv|prodaj|sale|sell)/.test(u))
+    hints.push("sales-focused (every post is for sale)");
+  if (/(posutoch|sutki|daily)/.test(u))
+    hints.push("daily-rental-focused (per-night)");
+  const hint = hints.length > 0 ? ` — ${hints.join(", ")}` : "";
+  return `@${username} — "${title}"${hint}`;
 }

@@ -28,6 +28,7 @@ export class CompositeRealEstateExtractor implements Extractor {
   async extract(input: {
     text: string;
     mediaUrls: string[];
+    channelContext?: string;
   }): Promise<ExtractedListing | null> {
     if (this.llm) {
       const llmStart = Date.now();
