@@ -1,4 +1,4 @@
-import { desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -65,9 +65,7 @@ export async function fetchAdminChannels(opts: {
         n: sql<number>`count(*)::int`,
       })
       .from(rawTelegramPosts)
-      .where(
-        sql`${rawTelegramPosts.telegramChannelId} = any(${channelIds}::uuid[])`,
-      )
+      .where(inArray(rawTelegramPosts.telegramChannelId, channelIds))
       .groupBy(rawTelegramPosts.telegramChannelId),
     db
       .select({
@@ -77,7 +75,10 @@ export async function fetchAdminChannels(opts: {
       .from(listingSources)
       .innerJoin(listings, eq(listings.id, listingSources.listingId))
       .where(
-        sql`${listingSources.telegramChannelId} = any(${channelIds}::uuid[]) and ${listings.status} = 'active'`,
+        and(
+          inArray(listingSources.telegramChannelId, channelIds),
+          eq(listings.status, "active"),
+        ),
       )
       .groupBy(listingSources.telegramChannelId),
   ]);
