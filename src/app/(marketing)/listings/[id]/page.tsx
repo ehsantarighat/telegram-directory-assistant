@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  ArrowLeftIcon,
   BookmarkIcon,
   ExternalLinkIcon,
   GitMergeIcon,
@@ -11,6 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { BackToListingsButton } from "@/components/listings/BackToListingsButton";
 import { ListingContactCard } from "@/components/listings/ListingContactCard";
 import { ListingFactsGrid } from "@/components/listings/ListingFactsGrid";
 import { ListingMediaGallery } from "@/components/listings/ListingMediaGallery";
@@ -127,15 +126,7 @@ export default async function ListingDetailPage({
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-5 md:px-8 md:py-8">
-      <Button
-        render={<Link href="/listings" />}
-        variant="ghost"
-        size="sm"
-        className="mb-4 gap-1"
-      >
-        <ArrowLeftIcon className="h-4 w-4" />
-        All listings
-      </Button>
+      <BackToListingsButton />
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
         <div className="flex flex-col gap-5">

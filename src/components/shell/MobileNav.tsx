@@ -19,7 +19,7 @@ export function MobileNav() {
       aria-label="Primary"
     >
       <ul
-        className="mx-auto grid max-w-md grid-cols-4 px-2 pt-2"
+        className="mx-auto grid max-w-md grid-cols-5 px-1 pt-2"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
       >
         {PRIMARY_NAV.map((item) => {

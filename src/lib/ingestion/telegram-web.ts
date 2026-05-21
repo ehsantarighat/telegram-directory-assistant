@@ -82,10 +82,19 @@ export class TelegramWebSource implements IngestionSource {
             "User-Agent": USER_AGENT,
             "Accept-Language": "en,ru;q=0.9",
           },
+          // We disable redirect-following so we can detect the case where
+          // Telegram 302s from /s/<username> → /<username>. That redirect
+          // means the channel exists but its admin hasn't enabled the
+          // public web preview — we can't scrape it without MTProto.
+          redirect: "manual",
         });
+        if (res.status === 301 || res.status === 302 || res.status === 308) {
+          throw new Error(
+            `@${input.channelUsername} doesn't expose a public web preview. The channel admin must enable it in Telegram (Channel Info → Settings → Channel Type → ☑ "Show preview"), or wire up MTProto-based ingestion for private/preview-disabled channels.`,
+          );
+        }
         if (!res.ok) {
-          // 404 means the channel doesn't exist or isn't public preview-able.
-          // Anything else is transient; we surface the page's status code.
+          // 404 means the channel doesn't exist. Anything else is transient.
           throw new Error(
             `Telegram returned HTTP ${res.status} for @${input.channelUsername}`,
           );

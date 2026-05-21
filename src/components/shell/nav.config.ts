@@ -20,20 +20,25 @@ export type NavItem = {
 };
 
 /**
- * Bottom-nav items (mobile). Kept to four so they fit comfortably on a 375px
- * viewport without crowding. Top-nav (desktop) uses the same list plus the
- * "Suggest channel" CTA which lives in the user menu on mobile.
+ * Bottom-nav items (mobile) + top-nav items (desktop). Five short labels
+ * that fit on a 375px viewport (5 × 75px). Suggest sits in the middle so
+ * community contributions are reachable on mobile too — previously it
+ * was only in the desktop secondary nav, hidden on phones.
  */
 export const PRIMARY_NAV: NavItem[] = [
   { href: "/", label: "Discover", icon: HomeIcon },
   { href: "/listings", label: "Listings", icon: CompassIcon },
+  { href: "/suggest-channel", label: "Suggest", icon: Lightbulb },
   { href: "/saved", label: "Saved", icon: BookmarkIcon, requiresAuth: true },
   { href: "/profile", label: "Profile", icon: UserIcon, requiresAuth: true },
 ];
 
-export const SECONDARY_NAV: NavItem[] = [
-  { href: "/suggest-channel", label: "Suggest a channel", icon: Lightbulb },
-];
+/**
+ * Empty now that Suggest is in PRIMARY_NAV. Kept exported so DesktopNav
+ * keeps compiling without a refactor — the iteration over it becomes a
+ * no-op rather than a removed import surface.
+ */
+export const SECONDARY_NAV: NavItem[] = [];
 
 export const ADMIN_NAV: NavItem[] = [
   { href: "/admin", label: "Overview", icon: ScrollText },
