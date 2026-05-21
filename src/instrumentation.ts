@@ -37,8 +37,12 @@ export async function register() {
     console.error(
       "[env] ✗ FATAL — server refusing to start:\n" + message,
     );
-    // Crash the process so the platform marks the deploy as failed.
-    // The error already lists every missing var (see src/lib/env.ts).
-    process.exit(1);
+    // Rethrow so Next.js refuses to start the server. The platform
+    // marks the deploy failed, the deploy logs show this error, and
+    // the error itself lists every missing var (see src/lib/env.ts).
+    // We throw rather than process.exit so Turbopack's static analysis
+    // doesn't flag a Node-only API even though the runtime guard above
+    // restricts execution to the Node runtime.
+    throw err;
   }
 }
