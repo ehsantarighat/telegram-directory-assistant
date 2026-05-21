@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ExternalLinkIcon, Radio } from "lucide-react";
+import { ExternalLinkIcon, Loader2Icon, Radio } from "lucide-react";
 
 import { AdminShell } from "@/components/shell/AdminShell";
 import { Badge } from "@/components/ui/badge";
@@ -115,7 +115,15 @@ export default async function AdminChannelsPage() {
                       {c.postsImportedCount.toLocaleString()}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">
-                      {c.lastSyncedAt ? (
+                      {c.lastSyncStatus === "running" ? (
+                        <span className="inline-flex items-center gap-1.5 text-foreground">
+                          <Loader2Icon
+                            className="h-3 w-3 animate-spin"
+                            aria-hidden
+                          />
+                          Syncing…
+                        </span>
+                      ) : c.lastSyncedAt ? (
                         <div className="flex flex-col">
                           <span>{formatRelative(c.lastSyncedAt)}</span>
                           {c.lastSyncError && (
@@ -124,6 +132,10 @@ export default async function AdminChannelsPage() {
                             </span>
                           )}
                         </div>
+                      ) : c.lastSyncError ? (
+                        <span className="text-destructive">
+                          ⚠ {c.lastSyncError.slice(0, 40)}
+                        </span>
                       ) : (
                         "—"
                       )}

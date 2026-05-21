@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 
@@ -122,9 +123,18 @@ export async function upsertChannelAction(
     return { ok: true };
   }
 
-  // Insert path → also kick off an initial backfill (last 6 months OR
-  // 100 posts) so the channel shows up on the public feed immediately,
-  // not on the admin's next "Run sync" click.
+  // Insert path → kick off an initial backfill (last 6 months / 100 posts)
+  // so the channel shows up on the feed without an extra click. The sync
+  // hits the LLM for every new post (~3s each), so a full backfill can
+  // take minutes — we must NOT make the admin wait for that.
+  //
+  // Strategy:
+  //   1) Insert the row with lastSyncStatus='running' so the admin
+  //      channels table immediately shows "Syncing…" next to it.
+  //   2) Return success to the form so the dialog closes.
+  //   3) Use Next.js `after()` to run the actual sync after the response
+  //      is committed. Errors are caught and stamped on the row so the
+  //      admin sees them on next refresh.
   const [inserted] = await db
     .insert(telegramChannels)
     .values({
@@ -136,25 +146,35 @@ export async function upsertChannelAction(
       city: parsed.data.city || null,
       language: parsed.data.language || null,
       status: "active",
+      lastSyncStatus: "running",
     })
     .returning({ id: telegramChannels.id });
 
   await revalidate();
 
-  // Inline backfill. Bounded to 100 posts / ~6 months, so the worst
-  // case is roughly the duration of one Telegram fetch + 100 DB
-  // upserts. Failures are non-fatal — the channel is still created
-  // and the admin can hit "Run sync" manually.
   if (inserted) {
-    try {
-      await runChannelSync(inserted.id, { maxPosts: 100, maxAgeDays: 183 });
-    } catch (err) {
-      console.warn(
-        `[channel-actions] initial backfill failed for @${normalized.username}:`,
-        err,
-      );
-    }
-    await revalidate();
+    const channelId = inserted.id;
+    const usernameForLog = normalized.username;
+    after(async () => {
+      try {
+        await runChannelSync(channelId, { maxPosts: 100, maxAgeDays: 183 });
+        console.log(
+          `[channel-actions] background backfill complete for @${usernameForLog}`,
+        );
+      } catch (err) {
+        console.warn(
+          `[channel-actions] background backfill failed for @${usernameForLog}:`,
+          err,
+        );
+      }
+      // Revalidate again now that the sync is done so admins (and the
+      // public feed) see the freshly-imported listings on next request.
+      revalidatePath("/admin");
+      revalidatePath("/admin/channels");
+      revalidatePath("/admin/listings");
+      revalidatePath("/listings");
+      revalidatePath("/");
+    });
   }
 
   return { ok: true };

@@ -75,12 +75,38 @@ export async function runChannelSync(
     maxAgeDays: opts.maxAgeDays ?? 183,
   });
 
+  // Mark the channel as actively syncing so the admin table can render
+  // a "Syncing…" indicator. ingestChannel will overwrite this to "ok"
+  // on success; the catch block below overwrites to "error" on failure.
+  await db
+    .update(telegramChannels)
+    .set({
+      lastSyncStatus: "running",
+      lastSyncError: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(telegramChannels.id, channel.id));
+
   try {
     const result = await ingestChannel({
       source,
       channelUsername: channel.username,
       limit: opts.maxPosts ?? 100,
     });
+
+    // Belt-and-braces: ingestChannel only stamps lastSyncStatus='ok'
+    // when at least one message was fetched. If the channel has no new
+    // posts since lastSyncedAt (or no posts at all on a fresh channel),
+    // the status would otherwise stay 'running' from the start-of-sync
+    // stamp above. Force it to 'ok' here so the UI clears the indicator.
+    await db
+      .update(telegramChannels)
+      .set({
+        lastSyncStatus: "ok",
+        lastSyncError: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(telegramChannels.id, channel.id));
 
     revalidatePath("/admin");
     revalidatePath("/admin/channels");
