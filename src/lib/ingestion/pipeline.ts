@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -88,9 +88,23 @@ export async function ingestChannel(opts: {
     `[ingest] starting @${channel.username} using extractor=${extractor.name}`,
   );
 
+  // The watermark for incremental fetches is the timestamp of the
+  // newest raw post we've already stored — NOT channel.lastSyncedAt
+  // (which now means "when sync last ran", a UX field, see below).
+  // First-ever sync of a channel will find no rows and pass `undefined`,
+  // which makes TelegramWebSource walk back the full 6mo / 100-post
+  // window.
+  const [latestRaw] = await db
+    .select({ publishedAt: rawTelegramPosts.publishedAt })
+    .from(rawTelegramPosts)
+    .where(eq(rawTelegramPosts.telegramChannelId, channel.id))
+    .orderBy(desc(rawTelegramPosts.publishedAt))
+    .limit(1);
+  const watermark = latestRaw?.publishedAt ?? undefined;
+
   const messages = await opts.source.fetchMessages({
     channelUsername: opts.channelUsername,
-    since: channel.lastSyncedAt ?? undefined,
+    since: watermark,
     limit: opts.limit,
   });
 
@@ -103,7 +117,6 @@ export async function ingestChannel(opts: {
   let inserted = 0;
   let duplicates = 0;
   let skipped = 0;
-  let lastSeenAt = channel.lastSyncedAt ?? null;
 
   for (const msg of messages) {
     const rawRow = await upsertRawPost(channel.id, msg);
@@ -134,23 +147,22 @@ export async function ingestChannel(opts: {
     if (outcome === "new") inserted += 1;
     else if (outcome === "duplicate") duplicates += 1;
     else skipped += 1;
-
-    if (!lastSeenAt || msg.postedAt > lastSeenAt) lastSeenAt = msg.postedAt;
   }
 
-  if (lastSeenAt) {
-    await db
-      .update(telegramChannels)
-      .set({
-        lastSyncedAt: lastSeenAt,
-        lastSyncStatus: "ok",
-        lastSyncError: null,
-        postsImportedCount:
-          channel.postsImportedCount + inserted + duplicates,
-        updatedAt: new Date(),
-      })
-      .where(eq(telegramChannels.id, channel.id));
-  }
+  // Stamp the channel with the sync RUN time (not the newest post's
+  // publish time — that was a semantic bug). The watermark for the
+  // NEXT sync's incremental fetch is derived from raw_telegram_posts
+  // at the top of this function, not stored here.
+  await db
+    .update(telegramChannels)
+    .set({
+      lastSyncedAt: new Date(),
+      lastSyncStatus: "ok",
+      lastSyncError: null,
+      postsImportedCount: channel.postsImportedCount + inserted + duplicates,
+      updatedAt: new Date(),
+    })
+    .where(eq(telegramChannels.id, channel.id));
 
   return { fetched: messages.length, inserted, duplicates, skipped };
 }
