@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -9,6 +9,7 @@ import {
   telegramChannels,
 } from "@/db/schema";
 
+import { findDuplicate } from "./dedup";
 import { RealEstateExtractor } from "./extract/real-estate";
 import type { ExtractedListing } from "./extract/types";
 import type { IngestionRawMessage, IngestionSource } from "./types";
@@ -17,27 +18,34 @@ const extractors = {
   "real-estate": new RealEstateExtractor(),
 } as const;
 
+export type IngestResult = {
+  fetched: number;
+  inserted: number;
+  duplicates: number;
+  skipped: number;
+};
+
 /**
  * Source-agnostic ingestion pipeline.
  *
  *   ingestChannel({ source, channelUsername })
  *     → source.fetchMessages()
  *     → for each raw message:
- *         · upsert into raw_telegram_posts (channel_id + telegram_message_id unique)
- *         · run extractor
- *         · upsert into listings (and create a listing_sources row)
+ *         · upsert into raw_telegram_posts
+ *         · run extractor (Phase 10: rule-based; later: AI hybrid)
+ *         · dedup check (Phase 10: signature-match; later: image hash + LLM)
+ *         · either attach to an existing canonical listing OR insert new
  *     → stamp telegram_channels.last_synced_at / posts_imported_count
  *
  * Idempotent — the unique index on (telegram_channel_id, telegram_message_id)
- * makes reruns safe. Listing-level deduplication via `duplicate_group_id`
- * is left for Phase 10 (mock sync); for now a single raw post produces a
- * single listing.
+ * suppresses double-inserts on the raw post side, and the dedup service
+ * suppresses near-duplicates on the listing side.
  */
 export async function ingestChannel(opts: {
   source: IngestionSource;
   channelUsername: string;
   limit?: number;
-}): Promise<{ fetched: number; inserted: number; skipped: number }> {
+}): Promise<IngestResult> {
   const [channel] = await db
     .select()
     .from(telegramChannels)
@@ -69,6 +77,7 @@ export async function ingestChannel(opts: {
   });
 
   let inserted = 0;
+  let duplicates = 0;
   let skipped = 0;
   let lastSeenAt = channel.lastSyncedAt ?? null;
 
@@ -87,7 +96,7 @@ export async function ingestChannel(opts: {
       continue;
     }
 
-    const wasInserted = await upsertListing({
+    const outcome = await materializeListing({
       channelId: channel.id,
       rawPostId: rawRow.id,
       categoryId: cat!.id,
@@ -97,7 +106,8 @@ export async function ingestChannel(opts: {
       extracted,
     });
 
-    if (wasInserted) inserted += 1;
+    if (outcome === "new") inserted += 1;
+    else if (outcome === "duplicate") duplicates += 1;
     else skipped += 1;
 
     if (!lastSeenAt || msg.postedAt > lastSeenAt) lastSeenAt = msg.postedAt;
@@ -109,12 +119,15 @@ export async function ingestChannel(opts: {
       .set({
         lastSyncedAt: lastSeenAt,
         lastSyncStatus: "ok",
-        postsImportedCount: channel.postsImportedCount + inserted,
+        lastSyncError: null,
+        postsImportedCount:
+          channel.postsImportedCount + inserted + duplicates,
+        updatedAt: new Date(),
       })
       .where(eq(telegramChannels.id, channel.id));
   }
 
-  return { fetched: messages.length, inserted, skipped };
+  return { fetched: messages.length, inserted, duplicates, skipped };
 }
 
 async function upsertRawPost(channelId: string, msg: IngestionRawMessage) {
@@ -123,7 +136,8 @@ async function upsertRawPost(channelId: string, msg: IngestionRawMessage) {
     .values({
       telegramChannelId: channelId,
       telegramMessageId: msg.externalId,
-      originalPostUrl: msg.raw.url as string | undefined ??
+      originalPostUrl:
+        (msg.raw.url as string | undefined) ??
         `https://t.me/${msg.source}/${msg.externalId}`,
       originalText: msg.text,
       publishedAt: msg.postedAt,
@@ -148,7 +162,13 @@ async function upsertRawPost(channelId: string, msg: IngestionRawMessage) {
   return row;
 }
 
-async function upsertListing(input: {
+type MaterializeOutcome = "new" | "duplicate" | "skipped";
+
+/**
+ * Either create a fresh listings row or attach this raw post to an
+ * existing canonical listing via listing_sources.
+ */
+async function materializeListing(input: {
   channelId: string;
   rawPostId: string;
   categoryId: string;
@@ -156,12 +176,9 @@ async function upsertListing(input: {
   originalPostUrl: string;
   mediaUrls: string[];
   extracted: ExtractedListing;
-}): Promise<boolean> {
-  const { extracted } = input;
-
-  // Phase 2: every successfully-extracted message yields one listing.
-  // Phase 10 (mock sync) will add a dedup pre-check using
-  // (normalized title + price + contact) before inserting.
+}): Promise<MaterializeOutcome> {
+  // Re-ingestion safety: if a listing already owns this raw_post as its
+  // primary source, skip (the raw post was processed in a prior run).
   const existing = await db
     .select({ id: listings.id })
     .from(listings)
@@ -177,9 +194,36 @@ async function upsertListing(input: {
       .update(rawTelegramPosts)
       .set({ processingStatus: "processed" })
       .where(eq(rawTelegramPosts.id, input.rawPostId));
-    return false;
+    return "skipped";
   }
 
+  const dedup = await findDuplicate(input.extracted);
+
+  if (dedup.kind === "duplicate") {
+    // Attach as a new source to the canonical listing
+    await db.insert(listingSources).values({
+      listingId: dedup.canonicalListingId,
+      rawTelegramPostId: input.rawPostId,
+      telegramChannelId: input.channelId,
+      originalPostUrl: input.originalPostUrl,
+      publishedAt: input.publishedAt,
+    });
+    await db
+      .update(listings)
+      .set({
+        sourceCount: sql`${listings.sourceCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(listings.id, dedup.canonicalListingId));
+    await db
+      .update(rawTelegramPosts)
+      .set({ processingStatus: "processed" })
+      .where(eq(rawTelegramPosts.id, input.rawPostId));
+    return "duplicate";
+  }
+
+  // No duplicate → insert fresh
+  const { extracted } = input;
   const [listingRow] = await db
     .insert(listings)
     .values({
@@ -225,5 +269,5 @@ async function upsertListing(input: {
     .set({ processingStatus: "processed" })
     .where(eq(rawTelegramPosts.id, input.rawPostId));
 
-  return true;
+  return "new";
 }

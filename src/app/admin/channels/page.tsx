@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 
 import { ChannelFormDialog } from "./ChannelFormDialog";
 import { ChannelStatusForm } from "./ChannelStatusForm";
+import { SyncButton } from "./SyncButton";
 
 export const metadata = {
   title: "Admin · Channels",
@@ -128,19 +129,25 @@ export default async function AdminChannelsPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <ChannelFormDialog
-                        categories={pickerCategories}
-                        mode="edit"
-                        defaults={{
-                          id: c.id,
-                          title: c.title,
-                          channelInput: c.url,
-                          categoryId: c.categoryId,
-                          country: c.country ?? "",
-                          city: c.city ?? "",
-                          language: c.language ?? "",
-                        }}
-                      />
+                      <div className="flex items-center justify-end gap-1">
+                        <SyncButton
+                          channelId={c.id}
+                          disabled={c.status !== "active"}
+                        />
+                        <ChannelFormDialog
+                          categories={pickerCategories}
+                          mode="edit"
+                          defaults={{
+                            id: c.id,
+                            title: c.title,
+                            channelInput: c.url,
+                            categoryId: c.categoryId,
+                            country: c.country ?? "",
+                            city: c.city ?? "",
+                            language: c.language ?? "",
+                          }}
+                        />
+                      </div>
                     </td>
                   </tr>
                 ))}
