@@ -6,11 +6,13 @@ import { ListingFeedInfinite } from "@/components/search/ListingFeedInfinite";
 import { SearchBar } from "@/components/search/SearchBar";
 import { SortSelect } from "@/components/search/SortSelect";
 import { EmptyState } from "@/components/states/EmptyState";
+import { getUser } from "@/lib/auth/getUser";
 import {
   fetchListingFacets,
   fetchListings,
   listingsQuerySchema,
 } from "@/lib/listings/query";
+import { getSavedListingIds } from "@/lib/listings/saved";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +45,20 @@ export default async function ListingsPage({
     ? parsed.data
     : listingsQuerySchema.parse({});
 
-  const [page, facets] = await Promise.all([
+  const [page, facets, user] = await Promise.all([
     fetchListings(query),
     fetchListingFacets(),
+    getUser(),
   ]);
+
+  const savedIds = user
+    ? Array.from(
+        await getSavedListingIds(
+          user.id,
+          page.items.map((i) => i.id),
+        ),
+      )
+    : [];
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 md:px-8 md:py-8">
@@ -83,6 +95,7 @@ export default async function ListingsPage({
         <ListingFeedInfinite
           key={JSON.stringify(query)}
           initial={page}
+          savedIds={savedIds}
         />
       )}
     </div>

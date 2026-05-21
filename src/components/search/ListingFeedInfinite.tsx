@@ -10,6 +10,8 @@ import type { ListingsListItem, ListingsPage } from "@/lib/listings/query";
 
 type Props = {
   initial: ListingsPage;
+  /** IDs the current viewer has saved (server-hydrated). */
+  savedIds?: string[];
 };
 
 /**
@@ -20,8 +22,9 @@ type Props = {
  * this component cleanly remounts with new initial state. No setState in
  * effect needed for prop synchronization.
  */
-export function ListingFeedInfinite({ initial }: Props) {
+export function ListingFeedInfinite({ initial, savedIds }: Props) {
   const searchParams = useSearchParams();
+  const savedSet = new Set(savedIds ?? []);
   const [items, setItems] = useState<ListingsListItem[]>(initial.items);
   const [cursor, setCursor] = useState<string | null>(initial.nextCursor);
   const [loading, setLoading] = useState(false);
@@ -68,7 +71,11 @@ export function ListingFeedInfinite({ initial }: Props) {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((listing) => (
-          <ListingCard key={listing.id} listing={listing} />
+          <ListingCard
+            key={listing.id}
+            listing={listing}
+            initialSaved={savedSet.has(listing.id)}
+          />
         ))}
         {loading &&
           Array.from({ length: 3 }).map((_, i) => (

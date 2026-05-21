@@ -15,12 +15,19 @@ import { ShareButton } from "./ShareButton";
 
 type Props = {
   listing: ListingsListItem;
+  /** Whether the current viewer has saved this listing (hydrated server-side) */
+  initialSaved?: boolean;
   /** Show wider variant on /saved or listing detail */
   variant?: "default" | "compact";
   className?: string;
 };
 
-export function ListingCard({ listing, variant = "default", className }: Props) {
+export function ListingCard({
+  listing,
+  initialSaved = false,
+  variant = "default",
+  className,
+}: Props) {
   const href = `/listings/${listing.id}`;
   const location = formatLocation({
     city: listing.city,
@@ -80,6 +87,7 @@ export function ListingCard({ listing, variant = "default", className }: Props) 
           <div className="absolute end-3 top-3 z-20 flex gap-1">
             <SaveButton
               listingId={listing.id}
+              initialSaved={initialSaved}
               initialSavedCount={listing.savedCount}
               variant="icon"
               className="bg-background/80 backdrop-blur"

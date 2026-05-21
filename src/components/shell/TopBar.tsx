@@ -4,6 +4,7 @@ import { SearchIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandMark } from "./BrandMark";
 import { DesktopNav } from "./DesktopNav";
+import { UserMenu } from "./UserMenu";
 
 /**
  * App-wide top bar. Compact on mobile (brand + search shortcut), full
@@ -25,6 +26,7 @@ export function TopBar() {
           >
             <SearchIcon className="h-5 w-5" aria-hidden />
           </Button>
+          <UserMenu />
         </div>
       </div>
     </header>

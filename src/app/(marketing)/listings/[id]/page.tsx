@@ -23,7 +23,9 @@ import { TranslationToggle } from "@/components/listings/TranslationToggle";
 import { formatRelative } from "@/lib/format/date";
 import { formatLocation, propertyTypeLabel } from "@/lib/format/listing";
 import { formatPrice, priceSuffix } from "@/lib/format/price";
+import { getUser } from "@/lib/auth/getUser";
 import { fetchListingById } from "@/lib/listings/query";
+import { isListingSaved } from "@/lib/listings/saved";
 
 export const dynamic = "force-dynamic";
 
@@ -51,8 +53,12 @@ export default async function ListingDetailPage({
   // Validate UUID shape — short-circuit to 404 if it doesn't look like one
   if (!/^[0-9a-fA-F-]{32,36}$/.test(id)) notFound();
 
-  const listing = await fetchListingById(id);
+  const [listing, user] = await Promise.all([
+    fetchListingById(id),
+    getUser(),
+  ]);
   if (!listing) notFound();
+  const initialSaved = user ? await isListingSaved(user.id, listing.id) : false;
 
   const price = formatPrice(listing.price, listing.currency, {
     suffix: priceSuffix(listing.listingType),
@@ -134,6 +140,7 @@ export default async function ListingDetailPage({
               <div className="-mx-1 mt-1 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
                 <SaveButton
                   listingId={listing.id}
+                  initialSaved={initialSaved}
                   initialSavedCount={listing.savedCount}
                   variant="labeled"
                 />
