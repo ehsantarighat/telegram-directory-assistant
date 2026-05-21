@@ -3,6 +3,7 @@ import { CompassIcon } from "lucide-react";
 import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { FiltersDrawer } from "@/components/filters/FiltersDrawer";
 import { ListingFeedInfinite } from "@/components/search/ListingFeedInfinite";
+import { SaveSearchButton } from "@/components/search/SaveSearchButton";
 import { SearchBar } from "@/components/search/SearchBar";
 import { SortSelect } from "@/components/search/SortSelect";
 import { EmptyState } from "@/components/states/EmptyState";
@@ -38,6 +39,16 @@ export default async function ListingsPage({
 }) {
   const raw = flatten(await searchParams);
   const parsed = listingsQuerySchema.safeParse(raw);
+
+  // "Active filters" = anything the user set beyond defaults. We
+  // ignore pagination and the no-op default sort so the Save-search
+  // button doesn't show on a stock /listings view.
+  const PAGINATION_KEYS = new Set(["cursor", "limit"]);
+  const hasActiveFilters = Object.entries(raw).some(([k, v]) => {
+    if (PAGINATION_KEYS.has(k)) return false;
+    if (k === "sort" && v === "newest") return false;
+    return v != null && v.length > 0;
+  });
 
   // Invalid query → render with defaults rather than 500; the chips above
   // will show whatever is in the URL so user can spot the issue.
@@ -80,6 +91,10 @@ export default async function ListingsPage({
           <div className="flex items-center gap-2">
             <FiltersDrawer facets={facets} />
             <SortSelect />
+            <SaveSearchButton
+              hasActiveFilters={hasActiveFilters}
+              signedIn={!!user}
+            />
           </div>
         </div>
         <ActiveFilterChips />

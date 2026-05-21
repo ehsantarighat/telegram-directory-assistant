@@ -54,12 +54,7 @@ async function main() {
     process.exit(1);
   }
 
-  const { default: postgres } = await import("postgres");
-  const sql = postgres(url, {
-    max: 1,
-    prepare: false,
-    ssl: { rejectUnauthorized: false },
-  });
+  const sql = await connectPostgres(url);
 
   try {
     console.log("--- BEFORE ---");
@@ -98,7 +93,18 @@ async function main() {
   }
 }
 
-async function reportCounts(sql: ReturnType<typeof import("postgres").default>) {
+type Sql = Awaited<ReturnType<typeof connectPostgres>>;
+
+async function connectPostgres(url: string) {
+  const { default: postgres } = await import("postgres");
+  return postgres(url, {
+    max: 1,
+    prepare: false,
+    ssl: { rejectUnauthorized: false },
+  });
+}
+
+async function reportCounts(sql: Sql) {
   const counts: Record<string, number> = {};
   for (const t of TABLES) {
     const rows = await sql.unsafe<{ n: number }[]>(

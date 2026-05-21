@@ -1,4 +1,4 @@
-import { LogOutIcon, ShieldIcon } from "lucide-react";
+import { BellIcon, LogOutIcon, ShieldIcon } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,10 @@ import {
 import { PageSection } from "@/components/states/PageSection";
 import { signOutAction } from "@/lib/auth/actions";
 import { requireUser } from "@/lib/auth/requireUser";
+import { fetchUserSavedSearches } from "@/lib/saved-searches/queries";
 
 import { ProfileForm } from "./ProfileForm";
+import { SavedSearchesList } from "./SavedSearchesList";
 
 export const metadata = {
   title: "Your profile",
@@ -22,6 +24,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
   const { user, profile } = await requireUser("/profile");
+  const savedSearches = await fetchUserSavedSearches(user.id);
 
   return (
     <PageSection
@@ -88,18 +91,26 @@ export default async function ProfilePage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Coming next</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>· Cached translation (Phase 6)</p>
-              <p>· Suggest a Telegram channel (Phase 7)</p>
-              <p>· Saved searches &amp; alerts (Phase 11)</p>
-            </CardContent>
-          </Card>
         </div>
       </div>
+
+      <Card className="mt-4">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-base">Saved searches</CardTitle>
+            <span className="font-normal text-muted-foreground">
+              · {savedSearches.length}
+            </span>
+          </div>
+          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+            <BellIcon className="h-3 w-3" aria-hidden />
+            Alerts coming soon
+          </span>
+        </CardHeader>
+        <CardContent>
+          <SavedSearchesList items={savedSearches} />
+        </CardContent>
+      </Card>
     </PageSection>
   );
 }
