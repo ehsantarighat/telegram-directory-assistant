@@ -1,47 +1,71 @@
 {
-  "id": "205ff696-56b1-418b-8020-52d0290b6518",
+  "id": "79eaf01a-d728-47d1-9e16-26836f159de5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.countries": {
-      "name": "countries",
+    "public.user_profiles": {
+      "name": "user_profiles",
       "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "uuid",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "code": {
-          "name": "code",
-          "type": "text",
-          "primaryKey": false,
           "notNull": true
         },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "currency_code": {
-          "name": "currency_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "default_language": {
-          "name": "default_language",
+        "preferred_language": {
+          "name": "preferred_language",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "default": "'en'"
         },
+        "preferred_content_mode": {
+          "name": "preferred_content_mode",
+          "type": "content_mode",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'original'"
+        },
+        "role": {
+          "name": "role",
+          "type": "user_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'user'"
+        },
+        "plan": {
+          "name": "plan",
+          "type": "user_plan",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'free'"
+        },
+        "avatar_url": {
+          "name": "avatar_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -51,15 +75,7 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "countries_code_unique": {
-          "name": "countries_code_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "code"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -75,43 +91,25 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "slug": {
-          "name": "slug",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
         "name": {
           "name": "name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "parent_id": {
-          "name": "parent_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "icon": {
-          "name": "icon",
+        "slug": {
+          "name": "slug",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
+        "status": {
+          "name": "status",
+          "type": "category_status",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "default": 0
-        },
-        "is_active": {
-          "name": "is_active",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
+          "default": "'active'"
         },
         "created_at": {
           "name": "created_at",
@@ -119,24 +117,17 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "categories_parent_id_categories_id_fk": {
-          "name": "categories_parent_id_categories_id_fk",
-          "tableFrom": "categories",
-          "tableTo": "categories",
-          "columnsFrom": [
-            "parent_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "categories_slug_unique": {
@@ -151,8 +142,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.locations": {
-      "name": "locations",
+    "public.telegram_channels": {
+      "name": "telegram_channels",
       "schema": "",
       "columns": {
         "id": {
@@ -162,54 +153,86 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "country_id": {
-          "name": "country_id",
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "username": {
+          "name": "username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category_id": {
+          "name": "category_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "parent_id": {
-          "name": "parent_id",
-          "type": "uuid",
+        "country": {
+          "name": "country",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "kind": {
-          "name": "kind",
-          "type": "location_kind",
+        "city": {
+          "name": "city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "language": {
+          "name": "language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "channel_status",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'active'"
         },
-        "slug": {
-          "name": "slug",
-          "type": "text",
+        "added_by_admin_id": {
+          "name": "added_by_admin_id",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "name": {
-          "name": "name",
-          "type": "text",
+        "last_synced_at": {
+          "name": "last_synced_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "name_local": {
-          "name": "name_local",
+        "last_sync_status": {
+          "name": "last_sync_status",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "latitude": {
-          "name": "latitude",
-          "type": "double precision",
+        "last_sync_error": {
+          "name": "last_sync_error",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "longitude": {
-          "name": "longitude",
-          "type": "double precision",
+        "posts_imported_count": {
+          "name": "posts_imported_count",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": 0
         },
         "created_at": {
           "name": "created_at",
@@ -217,35 +240,21 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
-        "locations_country_slug_unique": {
-          "name": "locations_country_slug_unique",
+        "telegram_channels_category_idx": {
+          "name": "telegram_channels_category_idx",
           "columns": [
             {
-              "expression": "country_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "slug",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "locations_parent_idx": {
-          "name": "locations_parent_idx",
-          "columns": [
-            {
-              "expression": "parent_id",
+              "expression": "category_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -256,11 +265,26 @@
           "method": "btree",
           "with": {}
         },
-        "locations_kind_idx": {
-          "name": "locations_kind_idx",
+        "telegram_channels_status_idx": {
+          "name": "telegram_channels_status_idx",
           "columns": [
             {
-              "expression": "kind",
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "telegram_channels_city_idx": {
+          "name": "telegram_channels_city_idx",
+          "columns": [
+            {
+              "expression": "city",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -273,12 +297,167 @@
         }
       },
       "foreignKeys": {
-        "locations_country_id_countries_id_fk": {
-          "name": "locations_country_id_countries_id_fk",
-          "tableFrom": "locations",
-          "tableTo": "countries",
+        "telegram_channels_category_id_categories_id_fk": {
+          "name": "telegram_channels_category_id_categories_id_fk",
+          "tableFrom": "telegram_channels",
+          "tableTo": "categories",
           "columnsFrom": [
-            "country_id"
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "telegram_channels_added_by_admin_id_user_profiles_id_fk": {
+          "name": "telegram_channels_added_by_admin_id_user_profiles_id_fk",
+          "tableFrom": "telegram_channels",
+          "tableTo": "user_profiles",
+          "columnsFrom": [
+            "added_by_admin_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "telegram_channels_username_unique": {
+          "name": "telegram_channels_username_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "username"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.channel_suggestions": {
+      "name": "channel_suggestions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "channel_url": {
+          "name": "channel_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "channel_username": {
+          "name": "channel_username",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suggested_category_id": {
+          "name": "suggested_category_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suggested_city": {
+          "name": "suggested_city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "channel_suggestion_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "admin_note": {
+          "name": "admin_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_by_admin_id": {
+          "name": "reviewed_by_admin_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reviewed_at": {
+          "name": "reviewed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "channel_suggestions_status_idx": {
+          "name": "channel_suggestions_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "channel_suggestions_user_idx": {
+          "name": "channel_suggestions_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "channel_suggestions_user_id_user_profiles_id_fk": {
+          "name": "channel_suggestions_user_id_user_profiles_id_fk",
+          "tableFrom": "channel_suggestions",
+          "tableTo": "user_profiles",
+          "columnsFrom": [
+            "user_id"
           ],
           "columnsTo": [
             "id"
@@ -286,12 +465,25 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "locations_parent_id_locations_id_fk": {
-          "name": "locations_parent_id_locations_id_fk",
-          "tableFrom": "locations",
-          "tableTo": "locations",
+        "channel_suggestions_suggested_category_id_categories_id_fk": {
+          "name": "channel_suggestions_suggested_category_id_categories_id_fk",
+          "tableFrom": "channel_suggestions",
+          "tableTo": "categories",
           "columnsFrom": [
-            "parent_id"
+            "suggested_category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "channel_suggestions_reviewed_by_admin_id_user_profiles_id_fk": {
+          "name": "channel_suggestions_reviewed_by_admin_id_user_profiles_id_fk",
+          "tableFrom": "channel_suggestions",
+          "tableTo": "user_profiles",
+          "columnsFrom": [
+            "reviewed_by_admin_id"
           ],
           "columnsTo": [
             "id"
@@ -306,8 +498,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.channels": {
-      "name": "channels",
+    "public.raw_telegram_posts": {
+      "name": "raw_telegram_posts",
       "schema": "",
       "columns": {
         "id": {
@@ -317,66 +509,81 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "kind": {
-          "name": "kind",
-          "type": "channel_kind",
-          "typeSchema": "public",
+        "telegram_channel_id": {
+          "name": "telegram_channel_id",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true,
-          "default": "'telegram'"
+          "notNull": true
         },
-        "external_id": {
-          "name": "external_id",
+        "telegram_message_id": {
+          "name": "telegram_message_id",
           "type": "bigint",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "username": {
-          "name": "username",
+        "original_post_url": {
+          "name": "original_post_url",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "title": {
-          "name": "title",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
+        "original_text": {
+          "name": "original_text",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "avatar_url": {
-          "name": "avatar_url",
+        "detected_language": {
+          "name": "detected_language",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "category_id": {
-          "name": "category_id",
-          "type": "uuid",
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true
         },
-        "country_id": {
-          "name": "country_id",
-          "type": "uuid",
+        "imported_at": {
+          "name": "imported_at",
+          "type": "timestamp with time zone",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
-        "is_active": {
-          "name": "is_active",
+        "has_media": {
+          "name": "has_media",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "default": true
+          "default": false
         },
-        "last_ingested_at": {
-          "name": "last_ingested_at",
-          "type": "timestamp with time zone",
+        "media_metadata": {
+          "name": "media_metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "raw_payload_json": {
+          "name": "raw_payload_json",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "processing_status": {
+          "name": "processing_status",
+          "type": "raw_post_processing_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "processing_error": {
+          "name": "processing_error",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -386,147 +593,9 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        }
-      },
-      "indexes": {
-        "channels_category_idx": {
-          "name": "channels_category_idx",
-          "columns": [
-            {
-              "expression": "category_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         },
-        "channels_country_idx": {
-          "name": "channels_country_idx",
-          "columns": [
-            {
-              "expression": "country_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "channels_category_id_categories_id_fk": {
-          "name": "channels_category_id_categories_id_fk",
-          "tableFrom": "channels",
-          "tableTo": "categories",
-          "columnsFrom": [
-            "category_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "channels_country_id_countries_id_fk": {
-          "name": "channels_country_id_countries_id_fk",
-          "tableFrom": "channels",
-          "tableTo": "countries",
-          "columnsFrom": [
-            "country_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "channels_username_unique": {
-          "name": "channels_username_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "username"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.raw_messages": {
-      "name": "raw_messages",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "channel_id": {
-          "name": "channel_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_message_id": {
-          "name": "external_message_id",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "posted_at": {
-          "name": "posted_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "text": {
-          "name": "text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "media_urls": {
-          "name": "media_urls",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'[]'::jsonb"
-        },
-        "raw_payload": {
-          "name": "raw_payload",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "state": {
-          "name": "state",
-          "type": "ingestion_state",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "error_message": {
-          "name": "error_message",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ingested_at": {
-          "name": "ingested_at",
+        "updated_at": {
+          "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -534,17 +603,17 @@
         }
       },
       "indexes": {
-        "raw_messages_channel_external_unique": {
-          "name": "raw_messages_channel_external_unique",
+        "raw_telegram_posts_channel_message_unique": {
+          "name": "raw_telegram_posts_channel_message_unique",
           "columns": [
             {
-              "expression": "channel_id",
+              "expression": "telegram_channel_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "external_message_id",
+              "expression": "telegram_message_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -555,11 +624,11 @@
           "method": "btree",
           "with": {}
         },
-        "raw_messages_posted_at_idx": {
-          "name": "raw_messages_posted_at_idx",
+        "raw_telegram_posts_published_idx": {
+          "name": "raw_telegram_posts_published_idx",
           "columns": [
             {
-              "expression": "posted_at",
+              "expression": "published_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -570,11 +639,11 @@
           "method": "btree",
           "with": {}
         },
-        "raw_messages_state_idx": {
-          "name": "raw_messages_state_idx",
+        "raw_telegram_posts_processing_status_idx": {
+          "name": "raw_telegram_posts_processing_status_idx",
           "columns": [
             {
-              "expression": "state",
+              "expression": "processing_status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -587,12 +656,12 @@
         }
       },
       "foreignKeys": {
-        "raw_messages_channel_id_channels_id_fk": {
-          "name": "raw_messages_channel_id_channels_id_fk",
-          "tableFrom": "raw_messages",
-          "tableTo": "channels",
+        "raw_telegram_posts_telegram_channel_id_telegram_channels_id_fk": {
+          "name": "raw_telegram_posts_telegram_channel_id_telegram_channels_id_fk",
+          "tableFrom": "raw_telegram_posts",
+          "tableTo": "telegram_channels",
           "columnsFrom": [
-            "channel_id"
+            "telegram_channel_id"
           ],
           "columnsTo": [
             "id"
@@ -618,23 +687,17 @@
           "notNull": true,
           "default": "gen_random_uuid()"
         },
-        "raw_message_id": {
-          "name": "raw_message_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "channel_id": {
-          "name": "channel_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "category_id": {
           "name": "category_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
+        },
+        "primary_raw_post_id": {
+          "name": "primary_raw_post_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
         },
         "listing_type": {
           "name": "listing_type",
@@ -643,21 +706,58 @@
           "primaryKey": false,
           "notNull": true
         },
-        "country_id": {
-          "name": "country_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "city_id": {
-          "name": "city_id",
-          "type": "uuid",
+        "property_type": {
+          "name": "property_type",
+          "type": "property_type",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
-        "district_id": {
-          "name": "district_id",
-          "type": "uuid",
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "original_text": {
+          "name": "original_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "detected_language": {
+          "name": "detected_language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "city": {
+          "name": "city",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "district": {
+          "name": "district",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "neighborhood": {
+          "name": "neighborhood",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -673,39 +773,123 @@
           "primaryKey": false,
           "notNull": false
         },
-        "price_usd": {
-          "name": "price_usd",
-          "type": "numeric(14, 2)",
+        "rooms": {
+          "name": "rooms",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
-        "title": {
-          "name": "title",
-          "type": "text",
+        "area_sqm": {
+          "name": "area_sqm",
+          "type": "numeric(10, 2)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "description": {
-          "name": "description",
-          "type": "text",
+        "floor": {
+          "name": "floor",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "language": {
-          "name": "language",
+        "total_floors": {
+          "name": "total_floors",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "furnished": {
+          "name": "furnished",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "new_building": {
+          "name": "new_building",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "renovation_status": {
+          "name": "renovation_status",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "contact_phones": {
-          "name": "contact_phones",
-          "type": "jsonb",
+        "metro_nearby": {
+          "name": "metro_nearby",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "owner_or_agent": {
+          "name": "owner_or_agent",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "commission": {
+          "name": "commission",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "parking": {
+          "name": "parking",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "balcony": {
+          "name": "balcony",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "elevator": {
+          "name": "elevator",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pets_allowed": {
+          "name": "pets_allowed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "heating_type": {
+          "name": "heating_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "building_material": {
+          "name": "building_material",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contact_phone": {
+          "name": "contact_phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "contact_telegram": {
+          "name": "contact_telegram",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "has_photos": {
+          "name": "has_photos",
+          "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "default": "'[]'::jsonb"
+          "default": false
         },
-        "telegram_url": {
-          "name": "telegram_url",
+        "main_image_url": {
+          "name": "main_image_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -717,12 +901,38 @@
           "notNull": true,
           "default": "'[]'::jsonb"
         },
-        "attributes": {
-          "name": "attributes",
-          "type": "jsonb",
+        "source_count": {
+          "name": "source_count",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "default": "'{}'::jsonb"
+          "default": 1
+        },
+        "saved_count": {
+          "name": "saved_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "duplicate_group_id": {
+          "name": "duplicate_group_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "imported_at": {
+          "name": "imported_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         },
         "status": {
           "name": "status",
@@ -732,17 +942,12 @@
           "notNull": true,
           "default": "'active'"
         },
-        "posted_at": {
-          "name": "posted_at",
-          "type": "timestamp with time zone",
+        "extraction_confidence_json": {
+          "name": "extraction_confidence_json",
+          "type": "jsonb",
           "primaryKey": false,
-          "notNull": true
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": "'{}'::jsonb"
         },
         "created_at": {
           "name": "created_at",
@@ -757,25 +962,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
-        },
-        "dedup_hash": {
-          "name": "dedup_hash",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "view_count": {
-          "name": "view_count",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
         }
       },
       "indexes": {
-        "listings_type_country_posted_idx": {
-          "name": "listings_type_country_posted_idx",
+        "listings_active_type_city_published_idx": {
+          "name": "listings_active_type_city_published_idx",
           "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
             {
               "expression": "listing_type",
               "isExpression": false,
@@ -783,13 +981,13 @@
               "nulls": "last"
             },
             {
-              "expression": "country_id",
+              "expression": "city",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "posted_at",
+              "expression": "published_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -800,32 +998,23 @@
           "method": "btree",
           "with": {}
         },
-        "listings_city_posted_idx": {
-          "name": "listings_city_posted_idx",
+        "listings_active_type_published_idx": {
+          "name": "listings_active_type_published_idx",
           "columns": [
             {
-              "expression": "city_id",
+              "expression": "status",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
             },
             {
-              "expression": "posted_at",
+              "expression": "listing_type",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "listings_district_idx": {
-          "name": "listings_district_idx",
-          "columns": [
+            },
             {
-              "expression": "district_id",
+              "expression": "published_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -851,11 +1040,11 @@
           "method": "btree",
           "with": {}
         },
-        "listings_status_idx": {
-          "name": "listings_status_idx",
+        "listings_property_type_idx": {
+          "name": "listings_property_type_idx",
           "columns": [
             {
-              "expression": "status",
+              "expression": "property_type",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -866,11 +1055,11 @@
           "method": "btree",
           "with": {}
         },
-        "listings_price_usd_idx": {
-          "name": "listings_price_usd_idx",
+        "listings_district_idx": {
+          "name": "listings_district_idx",
           "columns": [
             {
-              "expression": "price_usd",
+              "expression": "district",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -881,11 +1070,11 @@
           "method": "btree",
           "with": {}
         },
-        "listings_dedup_hash_idx": {
-          "name": "listings_dedup_hash_idx",
+        "listings_price_idx": {
+          "name": "listings_price_idx",
           "columns": [
             {
-              "expression": "dedup_hash",
+              "expression": "price",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -896,11 +1085,11 @@
           "method": "btree",
           "with": {}
         },
-        "listings_attributes_gin_idx": {
-          "name": "listings_attributes_gin_idx",
+        "listings_rooms_idx": {
+          "name": "listings_rooms_idx",
           "columns": [
             {
-              "expression": "attributes",
+              "expression": "rooms",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -908,37 +1097,41 @@
           ],
           "isUnique": false,
           "concurrently": false,
-          "method": "gin",
+          "method": "btree",
+          "with": {}
+        },
+        "listings_duplicate_group_idx": {
+          "name": "listings_duplicate_group_idx",
+          "columns": [
+            {
+              "expression": "duplicate_group_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "listings_published_at_idx": {
+          "name": "listings_published_at_idx",
+          "columns": [
+            {
+              "expression": "published_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
           "with": {}
         }
       },
       "foreignKeys": {
-        "listings_raw_message_id_raw_messages_id_fk": {
-          "name": "listings_raw_message_id_raw_messages_id_fk",
-          "tableFrom": "listings",
-          "tableTo": "raw_messages",
-          "columnsFrom": [
-            "raw_message_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "listings_channel_id_channels_id_fk": {
-          "name": "listings_channel_id_channels_id_fk",
-          "tableFrom": "listings",
-          "tableTo": "channels",
-          "columnsFrom": [
-            "channel_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
         "listings_category_id_categories_id_fk": {
           "name": "listings_category_id_categories_id_fk",
           "tableFrom": "listings",
@@ -952,38 +1145,12 @@
           "onDelete": "restrict",
           "onUpdate": "no action"
         },
-        "listings_country_id_countries_id_fk": {
-          "name": "listings_country_id_countries_id_fk",
+        "listings_primary_raw_post_id_raw_telegram_posts_id_fk": {
+          "name": "listings_primary_raw_post_id_raw_telegram_posts_id_fk",
           "tableFrom": "listings",
-          "tableTo": "countries",
+          "tableTo": "raw_telegram_posts",
           "columnsFrom": [
-            "country_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        },
-        "listings_city_id_locations_id_fk": {
-          "name": "listings_city_id_locations_id_fk",
-          "tableFrom": "listings",
-          "tableTo": "locations",
-          "columnsFrom": [
-            "city_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "listings_district_id_locations_id_fk": {
-          "name": "listings_district_id_locations_id_fk",
-          "tableFrom": "listings",
-          "tableTo": "locations",
-          "columnsFrom": [
-            "district_id"
+            "primary_raw_post_id"
           ],
           "columnsTo": [
             "id"
@@ -998,34 +1165,210 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.user_profiles": {
-      "name": "user_profiles",
+    "public.listing_sources": {
+      "name": "listing_sources",
       "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "uuid",
           "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "listing_id": {
+          "name": "listing_id",
+          "type": "uuid",
+          "primaryKey": false,
           "notNull": true
         },
-        "display_name": {
-          "name": "display_name",
+        "raw_telegram_post_id": {
+          "name": "raw_telegram_post_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telegram_channel_id": {
+          "name": "telegram_channel_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "original_post_url": {
+          "name": "original_post_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "published_at": {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "listing_sources_listing_raw_unique": {
+          "name": "listing_sources_listing_raw_unique",
+          "columns": [
+            {
+              "expression": "listing_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "raw_telegram_post_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "listing_sources_listing_idx": {
+          "name": "listing_sources_listing_idx",
+          "columns": [
+            {
+              "expression": "listing_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "listing_sources_channel_idx": {
+          "name": "listing_sources_channel_idx",
+          "columns": [
+            {
+              "expression": "telegram_channel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "listing_sources_listing_id_listings_id_fk": {
+          "name": "listing_sources_listing_id_listings_id_fk",
+          "tableFrom": "listing_sources",
+          "tableTo": "listings",
+          "columnsFrom": [
+            "listing_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "listing_sources_raw_telegram_post_id_raw_telegram_posts_id_fk": {
+          "name": "listing_sources_raw_telegram_post_id_raw_telegram_posts_id_fk",
+          "tableFrom": "listing_sources",
+          "tableTo": "raw_telegram_posts",
+          "columnsFrom": [
+            "raw_telegram_post_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "listing_sources_telegram_channel_id_telegram_channels_id_fk": {
+          "name": "listing_sources_telegram_channel_id_telegram_channels_id_fk",
+          "tableFrom": "listing_sources",
+          "tableTo": "telegram_channels",
+          "columnsFrom": [
+            "telegram_channel_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.listing_translations": {
+      "name": "listing_translations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "listing_id": {
+          "name": "listing_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "language": {
+          "name": "language",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "translated_title": {
+          "name": "translated_title",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "preferred_language": {
-          "name": "preferred_language",
+        "translated_summary": {
+          "name": "translated_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "translated_text": {
+          "name": "translated_text",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "direction": {
+          "name": "direction",
+          "type": "translation_direction",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ltr'"
+        },
+        "provider": {
+          "name": "provider",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
-          "default": "'en'"
-        },
-        "avatar_url": {
-          "name": "avatar_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
+          "default": "'mock'"
         },
         "created_at": {
           "name": "created_at",
@@ -1042,8 +1385,44 @@
           "default": "now()"
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "listing_translations_listing_language_unique": {
+          "name": "listing_translations_listing_language_unique",
+          "columns": [
+            {
+              "expression": "listing_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "language",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "listing_translations_listing_id_listings_id_fk": {
+          "name": "listing_translations_listing_id_listings_id_fk",
+          "tableFrom": "listing_translations",
+          "tableTo": "listings",
+          "columnsFrom": [
+            "listing_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -1054,6 +1433,13 @@
       "name": "saved_listings",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
         "user_id": {
           "name": "user_id",
           "type": "uuid",
@@ -1066,8 +1452,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "saved_at": {
-          "name": "saved_at",
+        "created_at": {
+          "name": "created_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -1075,8 +1461,8 @@
         }
       },
       "indexes": {
-        "saved_listings_user_idx": {
-          "name": "saved_listings_user_idx",
+        "saved_listings_user_listing_unique": {
+          "name": "saved_listings_user_listing_unique",
           "columns": [
             {
               "expression": "user_id",
@@ -1085,7 +1471,28 @@
               "nulls": "last"
             },
             {
-              "expression": "saved_at",
+              "expression": "listing_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "saved_listings_user_created_idx": {
+          "name": "saved_listings_user_created_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1125,15 +1532,7 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "saved_listings_user_id_listing_id_pk": {
-          "name": "saved_listings_user_id_listing_id_pk",
-          "columns": [
-            "user_id",
-            "listing_id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -1162,28 +1561,42 @@
           "primaryKey": false,
           "notNull": true
         },
-        "query": {
-          "name": "query",
+        "category_id": {
+          "name": "category_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "filters_json": {
+          "name": "filters_json",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'::jsonb"
         },
-        "notify_enabled": {
-          "name": "notify_enabled",
+        "alerts_enabled": {
+          "name": "alerts_enabled",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
           "default": false
         },
-        "last_run_at": {
-          "name": "last_run_at",
-          "type": "timestamp with time zone",
+        "notification_channel": {
+          "name": "notification_channel",
+          "type": "notification_channel",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
         "created_at": {
           "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -1220,6 +1633,183 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "saved_searches_category_id_categories_id_fk": {
+          "name": "saved_searches_category_id_categories_id_fk",
+          "tableFrom": "saved_searches",
+          "tableTo": "categories",
+          "columnsFrom": [
+            "category_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.removal_requests": {
+      "name": "removal_requests",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "requester_name": {
+          "name": "requester_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requester_email": {
+          "name": "requester_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "requester_type": {
+          "name": "requester_type",
+          "type": "removal_requester_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "telegram_channel_id": {
+          "name": "telegram_channel_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "listing_id": {
+          "name": "listing_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "note": {
+          "name": "note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "removal_request_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "admin_note": {
+          "name": "admin_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "removal_requests_status_idx": {
+          "name": "removal_requests_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "removal_requests_listing_idx": {
+          "name": "removal_requests_listing_idx",
+          "columns": [
+            {
+              "expression": "listing_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "removal_requests_channel_idx": {
+          "name": "removal_requests_channel_idx",
+          "columns": [
+            {
+              "expression": "telegram_channel_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "removal_requests_telegram_channel_id_telegram_channels_id_fk": {
+          "name": "removal_requests_telegram_channel_id_telegram_channels_id_fk",
+          "tableFrom": "removal_requests",
+          "tableTo": "telegram_channels",
+          "columnsFrom": [
+            "telegram_channel_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        },
+        "removal_requests_listing_id_listings_id_fk": {
+          "name": "removal_requests_listing_id_listings_id_fk",
+          "tableFrom": "removal_requests",
+          "tableTo": "listings",
+          "columnsFrom": [
+            "listing_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -1230,21 +1820,40 @@
     }
   },
   "enums": {
-    "public.channel_kind": {
-      "name": "channel_kind",
+    "public.category_status": {
+      "name": "category_status",
       "schema": "public",
       "values": [
-        "telegram"
+        "active",
+        "inactive"
       ]
     },
-    "public.ingestion_state": {
-      "name": "ingestion_state",
+    "public.channel_status": {
+      "name": "channel_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "disabled",
+        "removed",
+        "pending"
+      ]
+    },
+    "public.channel_suggestion_status": {
+      "name": "channel_suggestion_status",
       "schema": "public",
       "values": [
         "pending",
-        "extracted",
-        "failed",
-        "skipped"
+        "approved",
+        "rejected",
+        "duplicate"
+      ]
+    },
+    "public.content_mode": {
+      "name": "content_mode",
+      "schema": "public",
+      "values": [
+        "original",
+        "translated"
       ]
     },
     "public.listing_status": {
@@ -1252,9 +1861,10 @@
       "schema": "public",
       "values": [
         "active",
-        "expired",
+        "hidden",
+        "removed",
         "duplicate",
-        "hidden"
+        "incomplete"
       ]
     },
     "public.listing_type": {
@@ -1263,17 +1873,82 @@
       "values": [
         "rent",
         "sale",
-        "daily"
+        "daily_rent"
       ]
     },
-    "public.location_kind": {
-      "name": "location_kind",
+    "public.notification_channel": {
+      "name": "notification_channel",
       "schema": "public",
       "values": [
-        "country",
-        "region",
-        "city",
-        "district"
+        "email",
+        "telegram_bot",
+        "web_push",
+        "whatsapp"
+      ]
+    },
+    "public.property_type": {
+      "name": "property_type",
+      "schema": "public",
+      "values": [
+        "apartment",
+        "house",
+        "commercial",
+        "land",
+        "room",
+        "studio"
+      ]
+    },
+    "public.raw_post_processing_status": {
+      "name": "raw_post_processing_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "processed",
+        "failed",
+        "ignored"
+      ]
+    },
+    "public.removal_request_status": {
+      "name": "removal_request_status",
+      "schema": "public",
+      "values": [
+        "pending",
+        "approved",
+        "rejected",
+        "resolved"
+      ]
+    },
+    "public.removal_requester_type": {
+      "name": "removal_requester_type",
+      "schema": "public",
+      "values": [
+        "user",
+        "channel_owner",
+        "other"
+      ]
+    },
+    "public.translation_direction": {
+      "name": "translation_direction",
+      "schema": "public",
+      "values": [
+        "ltr",
+        "rtl"
+      ]
+    },
+    "public.user_plan": {
+      "name": "user_plan",
+      "schema": "public",
+      "values": [
+        "free",
+        "paid"
+      ]
+    },
+    "public.user_role": {
+      "name": "user_role",
+      "schema": "public",
+      "values": [
+        "user",
+        "admin"
       ]
     }
   },

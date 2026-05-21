@@ -1,13 +1,14 @@
-import { createHash } from "node:crypto";
 import { and, eq } from "drizzle-orm";
+
 import { db } from "@/db";
 import {
   categories,
-  channels,
+  listingSources,
   listings,
-  rawMessages,
+  rawTelegramPosts,
+  telegramChannels,
 } from "@/db/schema";
-import { UZS_PER_USD } from "@/db/seed-data/listings";
+
 import { RealEstateExtractor } from "./extract/real-estate";
 import type { ExtractedListing } from "./extract/types";
 import type { IngestionRawMessage, IngestionSource } from "./types";
@@ -17,17 +18,20 @@ const extractors = {
 } as const;
 
 /**
- * Source-agnostic ingestion pipeline. Wired into a Source implementation
- * (mock now, real Telegram in Phase 4).
+ * Source-agnostic ingestion pipeline.
  *
- *   pipeline.ingestChannel({ source, channelUsername })
- *     -> source.fetchMessages()
- *     -> for each: upsert raw_messages, run extractor, upsert listing
- *     -> stamp channels.last_ingested_at
+ *   ingestChannel({ source, channelUsername })
+ *     → source.fetchMessages()
+ *     → for each raw message:
+ *         · upsert into raw_telegram_posts (channel_id + telegram_message_id unique)
+ *         · run extractor
+ *         · upsert into listings (and create a listing_sources row)
+ *     → stamp telegram_channels.last_synced_at / posts_imported_count
  *
- * Idempotent: rerunning over the same messages is a no-op via the
- * (channel_id, external_message_id) unique constraint on raw_messages
- * and the dedup_hash check on listings.
+ * Idempotent — the unique index on (telegram_channel_id, telegram_message_id)
+ * makes reruns safe. Listing-level deduplication via `duplicate_group_id`
+ * is left for Phase 10 (mock sync); for now a single raw post produces a
+ * single listing.
  */
 export async function ingestChannel(opts: {
   source: IngestionSource;
@@ -36,24 +40,21 @@ export async function ingestChannel(opts: {
 }): Promise<{ fetched: number; inserted: number; skipped: number }> {
   const [channel] = await db
     .select()
-    .from(channels)
-    .where(eq(channels.username, opts.channelUsername))
+    .from(telegramChannels)
+    .where(eq(telegramChannels.username, opts.channelUsername))
     .limit(1);
   if (!channel) {
     throw new Error(`Unknown channel: ${opts.channelUsername}`);
   }
 
-  // Pick the extractor based on the channel's category. For Phase 1 the
-  // mock channels are tagged as the real-estate root category. Future
-  // verticals add their own extractor here.
   const [cat] = await db
     .select()
     .from(categories)
     .where(eq(categories.id, channel.categoryId))
     .limit(1);
-  const extractorKey = (cat?.slug ?? "").split("-")[0] === "real"
-    ? "real-estate"
-    : null;
+
+  const extractorKey =
+    cat?.slug === "real-estate" ? ("real-estate" as const) : null;
   const extractor = extractorKey ? extractors[extractorKey] : null;
   if (!extractor) {
     throw new Error(
@@ -63,36 +64,35 @@ export async function ingestChannel(opts: {
 
   const messages = await opts.source.fetchMessages({
     channelUsername: opts.channelUsername,
-    since: channel.lastIngestedAt ?? undefined,
+    since: channel.lastSyncedAt ?? undefined,
     limit: opts.limit,
   });
 
   let inserted = 0;
   let skipped = 0;
-  let lastSeenAt = channel.lastIngestedAt ?? null;
+  let lastSeenAt = channel.lastSyncedAt ?? null;
 
   for (const msg of messages) {
-    const rawRow = await upsertRawMessage(channel.id, msg);
+    const rawRow = await upsertRawPost(channel.id, msg);
     const extracted = extractor.extract({
       text: msg.text,
       mediaUrls: msg.mediaUrls,
     });
     if (!extracted) {
       await db
-        .update(rawMessages)
-        .set({ state: "skipped" })
-        .where(eq(rawMessages.id, rawRow.id));
+        .update(rawTelegramPosts)
+        .set({ processingStatus: "ignored" })
+        .where(eq(rawTelegramPosts.id, rawRow.id));
       skipped += 1;
       continue;
     }
 
     const wasInserted = await upsertListing({
       channelId: channel.id,
-      rawMessageId: rawRow.id,
+      rawPostId: rawRow.id,
       categoryId: cat!.id,
-      countryId: channel.countryId,
-      postedAt: msg.postedAt,
-      telegramUrl: `https://t.me/${channel.username}/${msg.externalId}`,
+      publishedAt: msg.postedAt,
+      originalPostUrl: `https://t.me/${channel.username}/${msg.externalId}`,
       mediaUrls: msg.mediaUrls,
       extracted,
     });
@@ -105,35 +105,43 @@ export async function ingestChannel(opts: {
 
   if (lastSeenAt) {
     await db
-      .update(channels)
-      .set({ lastIngestedAt: lastSeenAt })
-      .where(eq(channels.id, channel.id));
+      .update(telegramChannels)
+      .set({
+        lastSyncedAt: lastSeenAt,
+        lastSyncStatus: "ok",
+        postsImportedCount: channel.postsImportedCount + inserted,
+      })
+      .where(eq(telegramChannels.id, channel.id));
   }
 
   return { fetched: messages.length, inserted, skipped };
 }
 
-async function upsertRawMessage(
-  channelId: string,
-  msg: IngestionRawMessage,
-) {
+async function upsertRawPost(channelId: string, msg: IngestionRawMessage) {
   const [row] = await db
-    .insert(rawMessages)
+    .insert(rawTelegramPosts)
     .values({
-      channelId,
-      externalMessageId: msg.externalId,
-      postedAt: msg.postedAt,
-      text: msg.text,
-      mediaUrls: msg.mediaUrls,
-      rawPayload: msg.raw,
-      state: "pending",
+      telegramChannelId: channelId,
+      telegramMessageId: msg.externalId,
+      originalPostUrl: msg.raw.url as string | undefined ??
+        `https://t.me/${msg.source}/${msg.externalId}`,
+      originalText: msg.text,
+      publishedAt: msg.postedAt,
+      hasMedia: msg.mediaUrls.length > 0,
+      mediaMetadata: { urls: msg.mediaUrls },
+      rawPayloadJson: msg.raw,
+      processingStatus: "pending",
     })
     .onConflictDoUpdate({
-      target: [rawMessages.channelId, rawMessages.externalMessageId],
+      target: [
+        rawTelegramPosts.telegramChannelId,
+        rawTelegramPosts.telegramMessageId,
+      ],
       set: {
-        text: msg.text,
-        mediaUrls: msg.mediaUrls,
-        rawPayload: msg.raw,
+        originalText: msg.text,
+        rawPayloadJson: msg.raw,
+        mediaMetadata: { urls: msg.mediaUrls },
+        hasMedia: msg.mediaUrls.length > 0,
       },
     })
     .returning();
@@ -142,72 +150,80 @@ async function upsertRawMessage(
 
 async function upsertListing(input: {
   channelId: string;
-  rawMessageId: string;
+  rawPostId: string;
   categoryId: string;
-  countryId: string;
-  postedAt: Date;
-  telegramUrl: string;
+  publishedAt: Date;
+  originalPostUrl: string;
   mediaUrls: string[];
   extracted: ExtractedListing;
 }): Promise<boolean> {
   const { extracted } = input;
-  const dedupSource = [
-    input.channelId,
-    extracted.listingType,
-    extracted.title,
-    extracted.priceUzs ?? "",
-    extracted.contactPhones.join(","),
-  ].join("|");
-  const dedupHash = createHash("sha256")
-    .update(dedupSource)
-    .digest("hex")
-    .slice(0, 32);
 
-  // If a listing with this dedup_hash already exists, treat as duplicate.
+  // Phase 2: every successfully-extracted message yields one listing.
+  // Phase 10 (mock sync) will add a dedup pre-check using
+  // (normalized title + price + contact) before inserting.
   const existing = await db
     .select({ id: listings.id })
     .from(listings)
     .where(
-      and(eq(listings.channelId, input.channelId), eq(listings.dedupHash, dedupHash)),
+      and(
+        eq(listings.primaryRawPostId, input.rawPostId),
+        eq(listings.status, "active"),
+      ),
     )
     .limit(1);
   if (existing.length > 0) {
     await db
-      .update(rawMessages)
-      .set({ state: "extracted" })
-      .where(eq(rawMessages.id, input.rawMessageId));
+      .update(rawTelegramPosts)
+      .set({ processingStatus: "processed" })
+      .where(eq(rawTelegramPosts.id, input.rawPostId));
     return false;
   }
 
-  await db.insert(listings).values({
-    rawMessageId: input.rawMessageId,
-    channelId: input.channelId,
-    categoryId: input.categoryId,
-    listingType: extracted.listingType,
-    countryId: input.countryId,
-    price: extracted.priceUzs?.toString() ?? null,
-    currency: extracted.currency,
-    priceUsd:
-      extracted.priceUzs != null
-        ? (extracted.priceUzs / UZS_PER_USD).toFixed(2)
-        : null,
-    title: extracted.title,
-    description: extracted.description,
-    language: extracted.language ?? null,
-    contactPhones: extracted.contactPhones,
-    telegramUrl: input.telegramUrl,
-    mediaUrls: input.mediaUrls,
-    attributes: extracted.attributes,
-    status: "active",
-    postedAt: input.postedAt,
-    dedupHash,
+  const [listingRow] = await db
+    .insert(listings)
+    .values({
+      categoryId: input.categoryId,
+      primaryRawPostId: input.rawPostId,
+      listingType: extracted.listingType,
+      propertyType: extracted.propertyType ?? null,
+      title: extracted.title,
+      summary: extracted.summary ?? null,
+      originalText: extracted.originalText ?? null,
+      detectedLanguage: extracted.language ?? null,
+      country: extracted.country ?? null,
+      city: extracted.city ?? null,
+      district: extracted.district ?? null,
+      neighborhood: extracted.neighborhood ?? null,
+      price: extracted.price?.toString() ?? null,
+      currency: extracted.currency ?? null,
+      rooms: extracted.rooms ?? null,
+      areaSqm: extracted.areaSqm?.toString() ?? null,
+      floor: extracted.floor ?? null,
+      totalFloors: extracted.totalFloors ?? null,
+      furnished: extracted.furnished ?? null,
+      contactPhone: extracted.contactPhones[0] ?? null,
+      hasPhotos: input.mediaUrls.length > 0,
+      mainImageUrl: input.mediaUrls[0] ?? null,
+      mediaUrls: input.mediaUrls,
+      sourceCount: 1,
+      publishedAt: input.publishedAt,
+      status: "active",
+    })
+    .returning();
+
+  await db.insert(listingSources).values({
+    listingId: listingRow.id,
+    rawTelegramPostId: input.rawPostId,
+    telegramChannelId: input.channelId,
+    originalPostUrl: input.originalPostUrl,
+    publishedAt: input.publishedAt,
   });
 
   await db
-    .update(rawMessages)
-    .set({ state: "extracted" })
-    .where(eq(rawMessages.id, input.rawMessageId));
+    .update(rawTelegramPosts)
+    .set({ processingStatus: "processed" })
+    .where(eq(rawTelegramPosts.id, input.rawPostId));
 
   return true;
 }
-

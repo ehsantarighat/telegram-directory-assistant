@@ -8,14 +8,21 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+
+import { categories } from "./categories";
+import { notificationChannelEnum } from "./enums";
 import { userProfiles } from "./user-profiles";
 
 /**
- * Persisted search criteria a user can re-run, optionally notifying them
- * when new matching listings appear (notification worker arrives in Phase 4).
+ * Future-ready saved search + alert config.
  *
- * `query` mirrors the validated /api/listings query schema so the same code
- * path can re-execute a saved search.
+ * Phase 11 ships only the data model and a UI placeholder ("alerts
+ * coming soon"). No background job runs in MVP. When alerts ship, a
+ * matcher walks new listings against `filters_json` and dispatches via
+ * `notification_channel`.
+ *
+ * `filters_json` mirrors the validated query schema used by
+ * /api/listings so the same code path can re-run a saved search.
  */
 export const savedSearches = pgTable(
   "saved_searches",
@@ -25,13 +32,19 @@ export const savedSearches = pgTable(
       .notNull()
       .references(() => userProfiles.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    query: jsonb("query")
+    categoryId: uuid("category_id").references(() => categories.id, {
+      onDelete: "set null",
+    }),
+    filtersJson: jsonb("filters_json")
       .$type<Record<string, unknown>>()
       .notNull()
       .default(sql`'{}'::jsonb`),
-    notifyEnabled: boolean("notify_enabled").notNull().default(false),
-    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    alertsEnabled: boolean("alerts_enabled").notNull().default(false),
+    notificationChannel: notificationChannelEnum("notification_channel"),
     createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
@@ -42,6 +55,10 @@ export const savedSearchesRelations = relations(savedSearches, ({ one }) => ({
   user: one(userProfiles, {
     fields: [savedSearches.userId],
     references: [userProfiles.id],
+  }),
+  category: one(categories, {
+    fields: [savedSearches.categoryId],
+    references: [categories.id],
   }),
 }));
 
