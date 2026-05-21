@@ -195,7 +195,10 @@ export async function upsertChannelAction(
 function scheduleBackfill(channelId: string, username: string): void {
   after(async () => {
     try {
-      await runChannelSync(channelId, { maxPosts: 100, maxAgeDays: 183 });
+      // Smaller initial backfill (30 posts ≈ 90s at 3s/post) so the
+      // admin sees content quickly. They can hit "Run sync" again
+      // to pull more posts whenever they want.
+      await runChannelSync(channelId, { maxPosts: 30, maxAgeDays: 183 });
       console.log(
         `[channel-actions] background backfill complete for @${username}`,
       );

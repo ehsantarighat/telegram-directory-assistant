@@ -117,6 +117,7 @@ export async function ingestChannel(opts: {
   let inserted = 0;
   let duplicates = 0;
   let skipped = 0;
+  let processed = 0;
 
   for (const msg of messages) {
     const rawRow = await upsertRawPost(channel.id, msg);
@@ -147,6 +148,22 @@ export async function ingestChannel(opts: {
     if (outcome === "new") inserted += 1;
     else if (outcome === "duplicate") duplicates += 1;
     else skipped += 1;
+
+    // Heartbeat. Touches updatedAt so the channels table can show
+    // "stalled" for any sync whose updatedAt hasn't moved in a while,
+    // and progress is visible via lastSyncError (which we repurpose
+    // as a status line while running — gets cleared to null on success).
+    processed += 1;
+    if (processed % 5 === 0 || processed === messages.length) {
+      await db
+        .update(telegramChannels)
+        .set({
+          lastSyncStatus: "running",
+          lastSyncError: `Processed ${processed}/${messages.length}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(telegramChannels.id, channel.id));
+    }
   }
 
   // Stamp the channel with the sync RUN time (not the newest post's

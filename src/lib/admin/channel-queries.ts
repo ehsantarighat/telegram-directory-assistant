@@ -12,6 +12,14 @@ export type AdminChannel = TelegramChannel & {
 };
 
 /**
+ * A sync whose `updatedAt` hasn't advanced in this many minutes is
+ * considered stalled. The heartbeat in the pipeline updates updatedAt
+ * every 5 posts, so 5 minutes without movement means the process was
+ * killed (container restart, deploy, OOM) — not just slow.
+ */
+const STALE_SYNC_MINUTES = 5;
+
+/**
  * Channels visible in /admin/channels. By default hides 'removed'
  * channels — that status is the admin's way of saying "I'm done with
  * this channel"; surfacing them in the main list defeats the action.
@@ -36,5 +44,24 @@ export async function fetchAdminChannels(opts: {
     )
     .orderBy(desc(telegramChannels.createdAt));
 
-  return rows.map((r) => ({ ...r.channel, categoryName: r.categoryName }));
+  const staleCutoff = new Date(Date.now() - STALE_SYNC_MINUTES * 60_000);
+  return rows.map((r) => {
+    const ch = r.channel;
+    // Detect stalled syncs at read time. We don't write back — that
+    // would race with a sync that's actually still alive. UI uses
+    // these computed fields for display only.
+    if (
+      ch.lastSyncStatus === "running" &&
+      ch.updatedAt &&
+      ch.updatedAt < staleCutoff
+    ) {
+      return {
+        ...ch,
+        categoryName: r.categoryName,
+        lastSyncStatus: "stalled",
+        lastSyncError: `No progress since ${ch.updatedAt.toISOString()} — click Run sync to retry`,
+      };
+    }
+    return { ...ch, categoryName: r.categoryName };
+  });
 }

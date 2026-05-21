@@ -116,25 +116,41 @@ export default async function AdminChannelsPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">
                       {c.lastSyncStatus === "running" ? (
-                        <span className="inline-flex items-center gap-1.5 text-foreground">
-                          <Loader2Icon
-                            className="h-3 w-3 animate-spin"
-                            aria-hidden
-                          />
-                          Syncing…
-                        </span>
+                        <div className="flex flex-col">
+                          <span className="inline-flex items-center gap-1.5 text-foreground">
+                            <Loader2Icon
+                              className="h-3 w-3 animate-spin"
+                              aria-hidden
+                            />
+                            Syncing…
+                          </span>
+                          {c.lastSyncError && (
+                            <span className="text-[11px] text-muted-foreground">
+                              {c.lastSyncError}
+                            </span>
+                          )}
+                        </div>
+                      ) : c.lastSyncStatus === "stalled" ? (
+                        <div className="flex flex-col">
+                          <span className="text-amber-600 dark:text-amber-400">
+                            ⚠ Stalled
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">
+                            Click Run sync to retry
+                          </span>
+                        </div>
                       ) : c.lastSyncedAt ? (
                         <div className="flex flex-col">
                           <span>{formatRelative(c.lastSyncedAt)}</span>
                           {c.lastSyncError && (
                             <span className="text-destructive">
-                              ⚠ {c.lastSyncError.slice(0, 40)}
+                              ⚠ {c.lastSyncError.slice(0, 60)}
                             </span>
                           )}
                         </div>
                       ) : c.lastSyncError ? (
                         <span className="text-destructive">
-                          ⚠ {c.lastSyncError.slice(0, 40)}
+                          ⚠ {c.lastSyncError.slice(0, 60)}
                         </span>
                       ) : (
                         "—"
