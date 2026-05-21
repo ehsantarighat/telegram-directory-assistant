@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
@@ -84,20 +84,44 @@ export async function upsertChannelAction(
     .limit(1);
   if (!cat) return { fieldErrors: { categoryId: "Unknown category" } };
 
-  // Username collision check (excluding the row being edited)
-  const collision = await db
-    .select({ id: telegramChannels.id })
+  // Username collision check (excluding the row being edited).
+  // The `username` column has a unique constraint at the DB level, so
+  // we look up the existing row by username and decide what to do:
+  //   - editing this row → ignore (will be updated below)
+  //   - existing row is 'removed' → resurrect it (flip back to active,
+  //     update fields, re-run backfill). The admin set it to 'removed'
+  //     and now wants it back; this is the natural undo.
+  //   - existing row is 'active' or 'disabled' → reject as duplicate.
+  const [existing] = await db
+    .select({
+      id: telegramChannels.id,
+      status: telegramChannels.status,
+    })
     .from(telegramChannels)
-    .where(
-      and(
-        eq(telegramChannels.username, normalized.username),
-        parsed.data.id
-          ? ne(telegramChannels.id, parsed.data.id)
-          : undefined,
-      ),
-    )
+    .where(eq(telegramChannels.username, normalized.username))
     .limit(1);
-  if (collision.length > 0) {
+
+  if (existing && existing.id !== parsed.data.id) {
+    if (existing.status === "removed") {
+      await db
+        .update(telegramChannels)
+        .set({
+          title: parsed.data.title,
+          url: normalized.url,
+          categoryId: parsed.data.categoryId,
+          country: parsed.data.country || null,
+          city: parsed.data.city || null,
+          language: parsed.data.language || null,
+          status: "active",
+          lastSyncStatus: "running",
+          lastSyncError: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(telegramChannels.id, existing.id));
+      await revalidate();
+      scheduleBackfill(existing.id, normalized.username);
+      return { ok: true };
+    }
     return {
       fieldErrors: {
         channelInput: `@${normalized.username} already exists`,
@@ -153,31 +177,42 @@ export async function upsertChannelAction(
   await revalidate();
 
   if (inserted) {
-    const channelId = inserted.id;
-    const usernameForLog = normalized.username;
-    after(async () => {
-      try {
-        await runChannelSync(channelId, { maxPosts: 100, maxAgeDays: 183 });
-        console.log(
-          `[channel-actions] background backfill complete for @${usernameForLog}`,
-        );
-      } catch (err) {
-        console.warn(
-          `[channel-actions] background backfill failed for @${usernameForLog}:`,
-          err,
-        );
-      }
-      // Revalidate again now that the sync is done so admins (and the
-      // public feed) see the freshly-imported listings on next request.
-      revalidatePath("/admin");
-      revalidatePath("/admin/channels");
-      revalidatePath("/admin/listings");
-      revalidatePath("/listings");
-      revalidatePath("/");
-    });
+    scheduleBackfill(inserted.id, normalized.username);
   }
 
   return { ok: true };
+}
+
+/**
+ * Schedule the initial backfill to run AFTER this server action's
+ * response is committed. Used by both the insert path (new channel)
+ * and the resurrect path (re-adding a previously removed channel).
+ *
+ * Errors inside the callback are caught — they don't break the form
+ * response, and the row's lastSyncStatus + lastSyncError are stamped
+ * by runChannelSync so the admin sees them on next refresh.
+ */
+function scheduleBackfill(channelId: string, username: string): void {
+  after(async () => {
+    try {
+      await runChannelSync(channelId, { maxPosts: 100, maxAgeDays: 183 });
+      console.log(
+        `[channel-actions] background backfill complete for @${username}`,
+      );
+    } catch (err) {
+      console.warn(
+        `[channel-actions] background backfill failed for @${username}:`,
+        err,
+      );
+    }
+    // Revalidate now that the sync is done so admins (and the public
+    // feed) see the freshly-imported listings on next request.
+    revalidatePath("/admin");
+    revalidatePath("/admin/channels");
+    revalidatePath("/admin/listings");
+    revalidatePath("/listings");
+    revalidatePath("/");
+  });
 }
 
 const statusSchema = z.object({
