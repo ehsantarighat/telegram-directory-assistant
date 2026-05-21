@@ -67,6 +67,39 @@ Open <http://localhost:3000>. Hit `/api/listings` to see the seeded feed.
 | `pnpm db:studio` | Drizzle Studio (visual DB explorer) |
 | `pnpm db:seed` | Reset + load mock UZ real estate seed data |
 | `pnpm ingest:mock` | Run the mock ingestion source through the pipeline |
+| `pnpm env:check` | Verify every required env var + ping Supabase (run before deploys) |
+
+## Required environment variables
+
+The deployed app depends on four values. They're consumed by:
+
+- `src/lib/env.ts` — validates with Zod, lazily on first access
+- `src/instrumentation.ts` — touches each one at server boot and crashes the process with a clear log if any are missing
+
+| Variable | Required? | Where to find it |
+| --- | --- | --- |
+| `DATABASE_URL` | yes | Supabase → Connect → **ORM** → Transaction pooler (port 6543) string, with the database password substituted in. **No surrounding quotes anywhere in the value.** Must end with `?sslmode=require`. |
+| `NEXT_PUBLIC_SUPABASE_URL` | yes | Supabase Dashboard → Project Settings → Data API → `Project URL` (`https://<project-id>.supabase.co`) |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase Dashboard → Project Settings → API Keys → Publishable key (`sb_publishable_…`). The legacy `eyJ…` anon JWT also works. |
+| `NEXT_PUBLIC_SITE_URL` | optional | The public origin (`https://your-railway-domain.up.railway.app`). Used for absolute URLs in Supabase email links. Defaults to localhost. |
+| `SUPABASE_SERVICE_ROLE_KEY` | optional | Server-only. Reserved for future admin operations; not yet required by any code path. |
+
+### Keeping env vars safe (Railway-specific)
+
+Railway doesn't lock variables against deletion. To make accidents recoverable rather than catastrophic:
+
+1. **Keep a copy outside Railway.** Save the four values in a password manager (1Password, Bitwarden, etc.) so re-adding them takes 60 seconds, not an evening of debugging.
+2. **Run `pnpm env:check` before every deploy.** Catches missing vars, typos, paused Supabase projects, and stray quotes in `DATABASE_URL` *before* you push.
+3. **Watch for the boot log.** After every Railway deploy, the deploy logs should contain `[env] ✓ all required env vars validated`. If you don't see it, env validation failed during boot — the line above it lists exactly what's missing.
+4. **Build no longer crashes on missing vars.** Env validation is lazy (`src/lib/env.ts`), so even an empty Variables tab still produces a working build. The crash now happens at server start (loud, with a stack trace in the deploy logs) instead of silently breaking every request.
+5. **Use Railway's project-level shared variables** if you grow to multiple services. They survive service deletes and are surfaced at the project level, slightly harder to remove by mistake than per-service vars.
+
+If a variable goes missing in production:
+
+1. The Railway service will boot-fail. Open the deploy logs and you'll see `[env] ✗ FATAL — server refusing to start:` followed by the missing keys.
+2. Re-add the value from your password manager.
+3. Railway auto-redeploys. The next boot logs `[env] ✓ all required env vars validated` and traffic resumes.
+4. Run `pnpm env:check` locally afterwards so you've also caught any local drift.
 
 ## Project layout
 
