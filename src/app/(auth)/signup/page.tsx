@@ -29,7 +29,7 @@ export default function SignupPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="grid gap-3" aria-disabled>
+        <form className="grid gap-3">
           <div className="grid gap-1.5">
             <label htmlFor="name" className="text-sm font-medium">
               Full name

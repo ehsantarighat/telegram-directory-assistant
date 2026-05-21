@@ -33,7 +33,7 @@ export default function SuggestChannelPage() {
           </Badge>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-4" aria-disabled>
+          <form className="grid gap-4">
             <div className="grid gap-1.5">
               <label
                 htmlFor="channel-url"
