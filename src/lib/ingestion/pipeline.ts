@@ -14,6 +14,7 @@ import { CompositeRealEstateExtractor } from "./extract/composite";
 import { tryGetLlmExtractor } from "./extract/llm";
 import { RealEstateExtractor } from "./extract/real-estate";
 import type { ExtractedListing, Extractor } from "./extract/types";
+import { rehostPhotos } from "./storage";
 import type { IngestionRawMessage, IngestionSource } from "./types";
 
 /**
@@ -137,6 +138,8 @@ export async function ingestChannel(opts: {
 
     const outcome = await materializeListing({
       channelId: channel.id,
+      channelUsername: channel.username,
+      messageId: msg.externalId,
       rawPostId: rawRow.id,
       categoryId: cat!.id,
       publishedAt: msg.postedAt,
@@ -230,6 +233,8 @@ type MaterializeOutcome = "new" | "duplicate" | "skipped";
  */
 async function materializeListing(input: {
   channelId: string;
+  channelUsername: string;
+  messageId: number;
   rawPostId: string;
   categoryId: string;
   publishedAt: Date;
@@ -282,7 +287,40 @@ async function materializeListing(input: {
     return "duplicate";
   }
 
-  // No duplicate → insert fresh
+  // No duplicate → insert fresh.
+  //
+  // Photos: rehost from Telegram CDN to Supabase Storage BEFORE we
+  // insert. Telegram URLs expire in hours/days, so the URLs we'd
+  // write to listings.mediaUrls would go stale and break the
+  // gallery. After rehosting, mediaUrls holds permanent
+  // *.supabase.co URLs.
+  //
+  // Failed downloads (a particular image that won't fetch — already
+  // expired, network blip, etc.) are dropped from the array rather
+  // than padded with nulls. Better to render a 7-photo gallery than
+  // an 8-slot gallery with 1 broken thumbnail.
+  //
+  // When SUPABASE_SERVICE_ROLE_KEY is unset, rehostPhotos returns
+  // sourceUrls unchanged — legacy hot-link mode. The deploy stays
+  // usable; photos just break after CDN TTL like before.
+  const rehost = await rehostPhotos({
+    sourceUrls: input.mediaUrls,
+    channelUsername: input.channelUsername,
+    messageId: input.messageId,
+  });
+  if (
+    rehost.rehostedCount > 0 ||
+    rehost.cachedCount > 0 ||
+    rehost.failedCount > 0
+  ) {
+    console.log(
+      `[ingest] rehost @${input.channelUsername}/${input.messageId}: ` +
+        `${rehost.rehostedCount} new, ${rehost.cachedCount} cached, ` +
+        `${rehost.failedCount} failed`,
+    );
+  }
+  const stableMediaUrls = rehost.urls;
+
   const { extracted } = input;
   const [listingRow] = await db
     .insert(listings)
@@ -307,9 +345,9 @@ async function materializeListing(input: {
       totalFloors: extracted.totalFloors ?? null,
       furnished: extracted.furnished ?? null,
       contactPhone: extracted.contactPhones[0] ?? null,
-      hasPhotos: input.mediaUrls.length > 0,
-      mainImageUrl: input.mediaUrls[0] ?? null,
-      mediaUrls: input.mediaUrls,
+      hasPhotos: stableMediaUrls.length > 0,
+      mainImageUrl: stableMediaUrls[0] ?? null,
+      mediaUrls: stableMediaUrls,
       sourceCount: 1,
       publishedAt: input.publishedAt,
       status: "active",
