@@ -2,6 +2,7 @@ import { CompassIcon } from "lucide-react";
 
 import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { FiltersDrawer } from "@/components/filters/FiltersDrawer";
+import { ListingsUrlMemory } from "@/components/listings/ListingsUrlMemory";
 import { ListingFeedInfinite } from "@/components/search/ListingFeedInfinite";
 import { SaveSearchButton } from "@/components/search/SaveSearchButton";
 import { SearchBar } from "@/components/search/SearchBar";
@@ -73,6 +74,11 @@ export default async function ListingsPage({
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-5 md:px-8 md:py-8">
+      {/* Writes the current /listings URL (with filters) into
+          sessionStorage so the listing-detail "All listings" back
+          button can restore the exact filter state. Renders null. */}
+      <ListingsUrlMemory />
+
       <header className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
           Real estate listings

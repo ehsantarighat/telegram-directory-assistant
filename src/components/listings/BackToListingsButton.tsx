@@ -5,39 +5,33 @@ import { ArrowLeftIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
+import { readLastListingsUrl } from "./ListingsUrlMemory";
+
 /**
  * "All listings" back button on the listing detail page.
  *
- * Why this isn't a plain <Link href="/listings">:
- *   The /listings feed lives entirely in URL params (q, type, city,
- *   minPrice, …). A plain link to /listings drops those, so users
- *   coming from a filtered feed get dumped on an unfiltered one.
+ * The /listings feed lives entirely in URL params (q, type, city,
+ * minPrice, …). A plain <Link href="/listings"> drops those, so
+ * users coming from a filtered feed get dumped on an unfiltered one.
  *
- * router.back() returns to the previous history entry — typically the
- * same /listings?...filters URL the user came from — so the filter
- * state restores naturally via browser back semantics.
+ * Strategy:
+ *   1) Read the last-visited /listings URL from sessionStorage
+ *      (written by ListingsUrlMemory while the user is on /listings).
+ *      Restores the user's exact filter state regardless of how
+ *      they got to the detail page.
+ *   2) If sessionStorage is empty (first visit, private mode, etc.),
+ *      navigate to bare /listings.
  *
- * If there is no usable history (deep-linked from a bookmark, opened
- * in a new tab, came from /saved or an external link), we fall back
- * to a hard navigation to /listings.
+ * Browser back/forward continues to work naturally — this button is
+ * the in-app "up" affordance that the design renders at the top of
+ * every detail page.
  */
 export function BackToListingsButton() {
   const router = useRouter();
 
   const handleClick = () => {
-    // history.length === 1 means this is the only entry — there's nothing
-    // to back into. In all other cases, prefer browser-back so filters
-    // and scroll position survive.
-    if (
-      typeof window !== "undefined" &&
-      window.history.length > 1 &&
-      document.referrer &&
-      new URL(document.referrer).pathname.startsWith("/listings")
-    ) {
-      router.back();
-      return;
-    }
-    router.push("/listings");
+    const saved = readLastListingsUrl();
+    router.push(saved ?? "/listings");
   };
 
   return (
