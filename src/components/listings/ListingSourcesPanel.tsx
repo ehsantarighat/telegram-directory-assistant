@@ -80,12 +80,12 @@ function SourceRow({
         <RadioIcon className="h-4 w-4" aria-hidden />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <Link
             href={channelUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm font-semibold hover:underline"
+            className="min-w-0 break-words text-sm font-semibold hover:underline"
           >
             {channelTitle}
           </Link>
@@ -99,7 +99,7 @@ function SourceRow({
           href={channelUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs text-muted-foreground hover:underline"
+          className="break-all text-xs text-muted-foreground hover:underline"
         >
           @{channelUsername}
         </Link>

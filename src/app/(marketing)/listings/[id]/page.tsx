@@ -125,11 +125,16 @@ export default async function ListingDetailPage({
   });
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-5 md:px-8 md:py-8">
+    // `overflow-x-hidden` is a final guardrail against any descendant that
+    // still pushes wider than the viewport (long URLs, unbreakable hashtags
+    // in post text, etc.). `min-w-0` on grid children lets them shrink
+    // below their intrinsic content width, which is required for text and
+    // images to wrap/scale inside a constrained column.
+    <div className="mx-auto w-full max-w-6xl overflow-x-hidden px-4 py-5 md:px-8 md:py-8">
       <BackToListingsButton />
 
       <div className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
-        <div className="flex flex-col gap-5">
+        <div className="flex min-w-0 flex-col gap-5">
           <ListingMediaGallery
             images={listing.mediaUrls}
             alt={listing.title}
@@ -183,7 +188,10 @@ export default async function ListingDetailPage({
               </div>
 
               <div className="flex flex-wrap items-baseline justify-between gap-3">
-                <p className="text-3xl font-semibold text-primary" dir="ltr">
+                <p
+                  className="text-2xl font-semibold text-primary md:text-3xl break-words"
+                  dir="ltr"
+                >
                   {price}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -250,7 +258,7 @@ export default async function ListingDetailPage({
                 )}
               </h3>
               <p
-                className="whitespace-pre-line text-sm leading-relaxed text-foreground"
+                className="whitespace-pre-line break-words text-sm leading-relaxed text-foreground"
                 dir={displayDirection}
                 lang={activeLang ?? listing.detectedLanguage ?? undefined}
               >
@@ -260,7 +268,7 @@ export default async function ListingDetailPage({
           )}
         </div>
 
-        <aside className="flex flex-col gap-4 lg:sticky lg:top-20 lg:self-start">
+        <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-20 lg:self-start">
           <ListingSourcesPanel
             primary={listing.primarySource}
             additional={listing.additionalSources}
