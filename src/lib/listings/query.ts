@@ -169,8 +169,28 @@ function decodeCursor(
   }
 }
 
+/**
+ * "Is this listing visible on the public feed?" — encapsulates the
+ * fact that a listing is only shown if AT LEAST ONE of its source
+ * channels is still active. Listings whose only sources are removed
+ * channels stay in the DB (for attribution / future undelete) but
+ * don't appear on /listings or /listings/[id], matching what the
+ * admin dashboard counts.
+ *
+ * Implemented as an EXISTS subquery so it stays one set-based check
+ * regardless of how many sources the listing has. Re-used by
+ * fetchListings, fetchListingById, and fetchListingFacets so all
+ * three views stay consistent.
+ */
+const hasActiveSourceChannel = sql`exists (
+  select 1
+  from ${listingSources} ls
+  inner join ${telegramChannels} tc on tc.id = ls.telegram_channel_id
+  where ls.listing_id = ${listings.id} and tc.status = 'active'
+)`;
+
 export async function fetchListings(q: ListingsQuery): Promise<ListingsPage> {
-  const conditions = [eq(listings.status, "active")];
+  const conditions = [eq(listings.status, "active"), hasActiveSourceChannel];
 
   if (q.type) conditions.push(eq(listings.listingType, q.type));
   if (q.propertyType)
@@ -421,7 +441,7 @@ export async function fetchListingById(id: string) {
     })
     .from(listings)
     .leftJoin(categories, eq(listings.categoryId, categories.id))
-    .where(eq(listings.id, id))
+    .where(and(eq(listings.id, id), hasActiveSourceChannel))
     .limit(1);
 
   if (!row) return null;
@@ -520,11 +540,19 @@ export async function fetchListingById(id: string) {
  * Distinct values for the FiltersDrawer dropdowns. Cached per request.
  */
 export async function fetchListingFacets() {
+  // Facets must match the feed — only show values from listings the user
+  // could actually find (active listing AND at least one active source).
   const [cities, districts, channels, currencies] = await Promise.all([
     db
       .selectDistinct({ city: listings.city })
       .from(listings)
-      .where(and(eq(listings.status, "active"), sql`${listings.city} is not null`))
+      .where(
+        and(
+          eq(listings.status, "active"),
+          hasActiveSourceChannel,
+          sql`${listings.city} is not null`,
+        ),
+      )
       .orderBy(asc(listings.city)),
     db
       .selectDistinct({ district: listings.district })
@@ -532,6 +560,7 @@ export async function fetchListingFacets() {
       .where(
         and(
           eq(listings.status, "active"),
+          hasActiveSourceChannel,
           sql`${listings.district} is not null`,
         ),
       )
@@ -550,6 +579,7 @@ export async function fetchListingFacets() {
       .where(
         and(
           eq(listings.status, "active"),
+          hasActiveSourceChannel,
           sql`${listings.currency} is not null`,
         ),
       )
