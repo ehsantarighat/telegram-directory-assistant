@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" role="img" aria-label="No photos available">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3f4f6"/>
+      <stop offset="1" stop-color="#e5e7eb"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="url(#bg)"/>
+  <g fill="none" stroke="#9ca3af" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" transform="translate(140 88)">
+    <!-- Stylised apartment building -->
+    <path d="M0 120 L0 36 L60 0 L120 36 L120 120 Z"/>
+    <path d="M30 120 L30 80 L50 80 L50 120"/>
+    <path d="M70 60 L82 60 L82 72 L70 72 Z"/>
+    <path d="M90 60 L102 60 L102 72 L90 72 Z"/>
+    <path d="M70 90 L82 90 L82 102 L70 102 Z"/>
+    <path d="M90 90 L102 90 L102 102 L90 102 Z"/>
+    <line x1="-12" y1="120" x2="132" y2="120"/>
+  </g>
+  <text x="200" y="260" font-family="system-ui, -apple-system, sans-serif" font-size="14" fill="#9ca3af" text-anchor="middle">No photos</text>
+</svg>

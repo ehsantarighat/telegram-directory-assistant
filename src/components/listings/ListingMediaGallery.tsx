@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { ChevronLeftIcon, ChevronRightIcon, ImageIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -15,41 +15,72 @@ type Props = {
 
 /**
  * Mobile-first media gallery. Swipe/scroll-snap on touch devices,
- * arrow buttons + thumbnail strip on desktop. Empty state if no images.
+ * arrow buttons + thumbnail strip on desktop.
+ *
+ * Image-rendering decisions:
+ *   - object-contain (not object-cover) on the main image — listings
+ *     mix horizontal phone shots and 9:16 vertical photos. Cover would
+ *     crop the top/bottom of verticals; contain keeps the full image
+ *     visible inside the 4/3 box with letterbox bars.
+ *   - bg-muted on the box for clean letterbox background
+ *   - quality=85 to avoid weird upscaling artifacts on small sources
+ *   - onError swaps to /listing-placeholder.svg per-image, so a single
+ *     broken URL in a 10-photo album doesn't break the whole gallery.
+ *
+ * Empty state (0 images) uses the same SVG placeholder for visual
+ * consistency with the grid card.
  */
 export function ListingMediaGallery({ images, alt, className }: Props) {
   const [active, setActive] = useState(0);
+  const [brokenSet, setBrokenSet] = useState<Set<number>>(new Set());
 
   if (images.length === 0) {
     return (
       <div
         className={cn(
-          "flex aspect-[4/3] w-full items-center justify-center rounded-xl bg-muted text-muted-foreground",
+          "relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-muted",
           className,
         )}
         aria-label="No photos available"
       >
-        <div className="flex flex-col items-center gap-2 text-sm">
-          <ImageIcon className="h-8 w-8" aria-hidden />
-          <span>No photos provided</span>
-        </div>
+        <Image
+          src="/listing-placeholder.svg"
+          alt="No photos provided"
+          fill
+          sizes="(max-width: 768px) 100vw, 60vw"
+          className="object-cover"
+        />
       </div>
     );
   }
 
   const next = () => setActive((i) => (i + 1) % images.length);
   const prev = () => setActive((i) => (i - 1 + images.length) % images.length);
+  const markBroken = (i: number) =>
+    setBrokenSet((prev) => {
+      if (prev.has(i)) return prev;
+      const next = new Set(prev);
+      next.add(i);
+      return next;
+    });
+  const isBroken = brokenSet.has(active);
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-muted">
         <Image
-          src={images[active]}
+          key={active}
+          src={isBroken ? "/listing-placeholder.svg" : images[active]}
           alt={`${alt} — image ${active + 1}`}
           fill
           sizes="(max-width: 768px) 100vw, 60vw"
-          className="object-cover transition-opacity"
+          quality={85}
+          className={cn(
+            "transition-opacity",
+            isBroken ? "object-cover" : "object-contain",
+          )}
           priority={active === 0}
+          onError={() => markBroken(active)}
         />
         {images.length > 1 && (
           <>
@@ -94,11 +125,12 @@ export function ListingMediaGallery({ images, alt, className }: Props) {
               )}
             >
               <Image
-                src={src}
+                src={brokenSet.has(i) ? "/listing-placeholder.svg" : src}
                 alt=""
                 fill
                 sizes="80px"
                 className="object-cover"
+                onError={() => markBroken(i)}
               />
             </button>
           ))}

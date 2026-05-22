@@ -1,6 +1,5 @@
-import Image from "next/image";
 import Link from "next/link";
-import { BookmarkIcon, GitMergeIcon, ImageIcon, MapPinIcon } from "lucide-react";
+import { BookmarkIcon, GitMergeIcon, MapPinIcon } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { formatPrice, priceSuffix } from "@/lib/format/price";
@@ -9,6 +8,7 @@ import { formatLocation, formatRoomsAreaFloor } from "@/lib/format/listing";
 import { cn } from "@/lib/utils";
 import type { ListingsListItem } from "@/lib/listings/query";
 
+import { ListingThumb } from "./ListingThumb";
 import { ListingTypeBadge } from "./ListingTypeBadge";
 import { SaveButton } from "./SaveButton";
 import { ShareButton } from "./ShareButton";
@@ -56,20 +56,8 @@ export function ListingCard({
       </Link>
 
       <div className="relative">
-        <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-          {listing.mainImageUrl ? (
-            <Image
-              src={listing.mainImageUrl}
-              alt={listing.title}
-              fill
-              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-              className="object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-              <ImageIcon className="h-8 w-8" aria-hidden />
-            </div>
-          )}
+        <div className="relative">
+          <ListingThumb src={listing.mainImageUrl} alt={listing.title} />
 
           <div className="absolute start-3 top-3 flex items-center gap-1.5">
             <ListingTypeBadge type={listing.listingType} />
