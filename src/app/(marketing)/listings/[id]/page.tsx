@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { BackToListingsButton } from "@/components/listings/BackToListingsButton";
 import { ListingContactCard } from "@/components/listings/ListingContactCard";
+import { LocationMap } from "@/components/listings/LocationMap";
 import { ListingFactsGrid } from "@/components/listings/ListingFactsGrid";
 import { ListingMediaGallery } from "@/components/listings/ListingMediaGallery";
 import { ListingSourcesPanel } from "@/components/listings/ListingSourcesPanel";
@@ -240,6 +241,13 @@ export default async function ListingDetailPage({
           </Card>
 
           <ListingFactsGrid listing={listing} />
+
+          <LocationMap
+            city={listing.city}
+            district={listing.district}
+            neighborhood={listing.neighborhood}
+            country={listing.country}
+          />
 
           {displayOriginalText && (
             <Card className="p-4 md:p-5">
