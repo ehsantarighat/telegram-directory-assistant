@@ -32,9 +32,7 @@
 import { config as loadDotenv } from "dotenv";
 loadDotenv({ path: ".env.local", override: false });
 
-import { eq, sql, and, inArray } from "drizzle-orm";
-
-const SCRAPE_PAGE_SIZE = 20; // Telegram preview returns ~20 msgs/page
+import { eq, sql, and } from "drizzle-orm";
 
 async function main() {
   const args = process.argv.slice(2);
