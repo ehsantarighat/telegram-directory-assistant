@@ -10,27 +10,41 @@ import { readLastListingsUrl } from "./ListingsUrlMemory";
 /**
  * "All listings" back button on the listing detail page.
  *
- * The /listings feed lives entirely in URL params (q, type, city,
- * minPrice, …). A plain <Link href="/listings"> drops those, so
- * users coming from a filtered feed get dumped on an unfiltered one.
+ * Two goals to preserve simultaneously:
+ *   1. Filter state — the /listings feed is fully URL-driven, so
+ *      a plain push to "/listings" drops whatever filters the
+ *      user had set.
+ *   2. Scroll position + loaded-pages state — the infinite-scroll
+ *      feed only keeps its items + scroll if we re-use the cached
+ *      React tree. `router.push()` is a NEW navigation; Next.js
+ *      remounts the page, resets scroll to top, and drops the
+ *      loaded pages. `router.back()` traverses history; Next.js'
+ *      built-in scroll restoration + RSC cache restore both.
  *
  * Strategy:
- *   1) Read the last-visited /listings URL from sessionStorage
- *      (written by ListingsUrlMemory while the user is on /listings).
- *      Restores the user's exact filter state regardless of how
- *      they got to the detail page.
- *   2) If sessionStorage is empty (first visit, private mode, etc.),
- *      navigate to bare /listings.
- *
- * Browser back/forward continues to work naturally — this button is
- * the in-app "up" affordance that the design renders at the top of
- * every detail page.
+ *   - If we have a usable previous history entry AND
+ *     ListingsUrlMemory has saved a /listings URL (meaning the
+ *     user was on /listings before reaching this detail page),
+ *     use router.back(). Browser-back behaviour preserves scroll
+ *     position and loaded items for free.
+ *   - Otherwise (deep link, new tab, came from /saved, etc.) fall
+ *     back to a hard push to the last-known /listings URL.
+ *     Filter state survives via sessionStorage; scroll resets to
+ *     top, which is unavoidable without history state to restore.
  */
 export function BackToListingsButton() {
   const router = useRouter();
 
   const handleClick = () => {
+    if (typeof window === "undefined") return;
     const saved = readLastListingsUrl();
+    // history.length > 1 means there's at least one prior entry to
+    // back into. Combined with a saved /listings URL, this strongly
+    // suggests the user got here from /listings via client nav.
+    if (saved && window.history.length > 1) {
+      router.back();
+      return;
+    }
     router.push(saved ?? "/listings");
   };
 
