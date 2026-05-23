@@ -133,6 +133,55 @@ export class TelegramWebSource implements IngestionSource {
 
     // Pipeline contract is oldest-first
     collected.sort((a, b) => a.postedAt.getTime() - b.postedAt.getTime());
+
+    // Album-photo recovery for "photos-first, description-last" channels
+    // (NataHomeUz convention): some channels post the photos as a multi-
+    // message album and then a separate text message with the listing
+    // description. Telegram's t.me/s/ preview only renders the lead
+    // (text) message and hides the album members, so our scraper gets
+    // a post with text but zero photos.
+    //
+    // The photos are still accessible via each member's individual
+    // embed page (t.me/<channel>/<msgId>?embed=1 bundles the full
+    // album). For each photo-less message, try fetching the previous
+    // message ID — that's the most likely album member, and Telegram
+    // returns the entire album from any member's embed.
+    //
+    // This adds at most one extra HTTP request per photo-less message
+    // and is skipped entirely when the previous message ID isn't an
+    // obvious gap (i.e. the post is genuinely text-only).
+    for (let i = 0; i < collected.length; i++) {
+      const msg = collected[i];
+      if (msg.mediaUrls.length > 0) continue;
+      if (msg.text.length < 30) continue; // skip tiny/empty posts
+      // Only attempt recovery if there's an ID gap below this message
+      // — that's the signature of a hidden album.
+      const prevSeenId = i > 0 ? collected[i - 1].externalId : null;
+      if (prevSeenId !== null && msg.externalId - prevSeenId < 2) continue;
+
+      const candidateId = msg.externalId - 1;
+      try {
+        const embedUrl = `https://t.me/${input.channelUsername}/${candidateId}?embed=1`;
+        const res = await fetcher(embedUrl, {
+          headers: {
+            "User-Agent": USER_AGENT,
+            "Accept-Language": "en,ru;q=0.9",
+          },
+        });
+        if (!res.ok) continue;
+        const html = await res.text();
+        const photos = extractPhotoUrls(html);
+        if (photos.length > 0) {
+          msg.mediaUrls = photos;
+          (msg.raw as Record<string, unknown>).albumRecoveredFrom = candidateId;
+          (msg.raw as Record<string, unknown>).photos = photos;
+        }
+      } catch {
+        // Recovery is best-effort — failures fall through silently and
+        // the post just stays photo-less.
+      }
+    }
+
     return collected;
   }
 }

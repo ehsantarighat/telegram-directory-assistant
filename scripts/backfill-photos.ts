@@ -191,9 +191,44 @@ async function main() {
     totalChannelsScraped += 1;
 
     // For each listing in this channel, fetch its photos by message_id
-    // and re-host them.
+    // and re-host them. If the message wasn't found in the preview
+    // page (the lead message is text-only with hidden album members),
+    // try the adjacent ID's embed page — Telegram returns the full
+    // album from any member message.
     for (const l of group.listings) {
-      const freshUrls = messageMap.get(l.messageId);
+      let freshUrls = messageMap.get(l.messageId);
+      if (!freshUrls || freshUrls.length === 0) {
+        // Album recovery: text-only-lead convention. The album members
+        // (which Telegram hides from the channel preview) are at the
+        // message IDs just before this one. Fetch their embed and
+        // extract the album photos.
+        try {
+          const embedUrl = `https://t.me/${username}/${l.messageId - 1}?embed=1`;
+          const res = await fetch(embedUrl, {
+            headers: {
+              "User-Agent":
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+            },
+          });
+          if (res.ok) {
+            const html = await res.text();
+            const re =
+              /background-image:url\('(https:\/\/cdn\d+\.telesco\.pe\/[^']+)'\)/g;
+            const urls: string[] = [];
+            const seen = new Set<string>();
+            let m: RegExpExecArray | null;
+            while ((m = re.exec(html)) !== null) {
+              if (!seen.has(m[1])) {
+                seen.add(m[1]);
+                urls.push(m[1]);
+              }
+            }
+            if (urls.length > 0) freshUrls = urls;
+          }
+        } catch {
+          // best-effort
+        }
+      }
       if (!freshUrls || freshUrls.length === 0) {
         // Couldn't find this message in the recent preview; old post
         // or removed. Clear photos so the UI shows the placeholder
