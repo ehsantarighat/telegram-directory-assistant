@@ -15,6 +15,7 @@ import { BackToListingsButton } from "@/components/listings/BackToListingsButton
 import { ListingContactCard } from "@/components/listings/ListingContactCard";
 import { LocationMap } from "@/components/listings/LocationMap";
 import { ListingFactsGrid } from "@/components/listings/ListingFactsGrid";
+import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingMediaGallery } from "@/components/listings/ListingMediaGallery";
 import { ListingSourcesPanel } from "@/components/listings/ListingSourcesPanel";
 import { ListingTypeBadge } from "@/components/listings/ListingTypeBadge";
@@ -29,7 +30,8 @@ import { formatPrice, priceSuffix } from "@/lib/format/price";
 import { getProfile } from "@/lib/auth/getProfile";
 import { getUser } from "@/lib/auth/getUser";
 import { fetchListingById } from "@/lib/listings/query";
-import { isListingSaved } from "@/lib/listings/saved";
+import { fetchRecommendations } from "@/lib/listings/recommendations";
+import { getSavedListingIds, isListingSaved } from "@/lib/listings/saved";
 import { bumpViewCount } from "@/lib/listings/views";
 import { translateListing } from "@/lib/translation";
 import type { TargetLanguage } from "@/lib/translation/types";
@@ -88,10 +90,19 @@ export default async function ListingDetailPage({
   // user-facing render on the write. Status-guarded inside bumpViewCount.
   after(() => bumpViewCount(listing.id));
 
-  const [initialSaved, profile] = await Promise.all([
+  const [initialSaved, profile, recommendations] = await Promise.all([
     user ? isListingSaved(user.id, listing.id) : Promise.resolve(false),
     user ? getProfile(user.id) : Promise.resolve(null),
+    fetchRecommendations(listing, 6),
   ]);
+
+  // Hydrate which recommendations the current user has already saved
+  // so each card's save icon renders correctly on first paint. Single
+  // round-trip to listings_saved keyed on the recommendation ids.
+  const recommendationIds = recommendations.map((r) => r.id);
+  const savedRecommendationIds = user
+    ? await getSavedListingIds(user.id, recommendationIds)
+    : new Set<string>();
 
   // Resolve the active language:
   //   1. ?lang= in the URL (explicit)
@@ -288,6 +299,39 @@ export default async function ListingDetailPage({
                 {displayOriginalText}
               </p>
             </Card>
+          )}
+
+          {recommendations.length > 0 && (
+            <section
+              aria-labelledby="similar-listings-heading"
+              className="flex flex-col gap-3"
+            >
+              <div className="flex flex-col gap-0.5">
+                <h2
+                  id="similar-listings-heading"
+                  className="text-lg font-semibold tracking-tight"
+                >
+                  Similar listings
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Other {listing.listingType === "sale" ? "sales" : "rentals"}{" "}
+                  in {listing.city}
+                  {listing.district ? ` · ${listing.district}` : ""}
+                  {listing.price && listing.currency
+                    ? ` · around ${listing.currency} ${Number(listing.price).toLocaleString()}`
+                    : ""}
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {recommendations.map((r) => (
+                  <ListingCard
+                    key={r.id}
+                    listing={r}
+                    initialSaved={savedRecommendationIds.has(r.id)}
+                  />
+                ))}
+              </div>
+            </section>
           )}
         </div>
 
