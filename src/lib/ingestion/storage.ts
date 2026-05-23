@@ -16,8 +16,6 @@
  * while env is being configured. Photos break as before, but at
  * least extraction + listings still work.
  */
-import "server-only";
-
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { env } from "@/lib/env";
