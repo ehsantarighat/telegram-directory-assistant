@@ -15,7 +15,10 @@ import { BackToListingsButton } from "@/components/listings/BackToListingsButton
 import { ListingContactCard } from "@/components/listings/ListingContactCard";
 import { LocationMap } from "@/components/listings/LocationMap";
 import { ListingFactsGrid } from "@/components/listings/ListingFactsGrid";
+import { ListingActivity } from "@/components/listings/ListingActivity";
 import { ListingCard } from "@/components/listings/ListingCard";
+import { ListingChannelSnapshot } from "@/components/listings/ListingChannelSnapshot";
+import { ListingFullDetails } from "@/components/listings/ListingFullDetails";
 import { ListingMediaGallery } from "@/components/listings/ListingMediaGallery";
 import { ListingSourcesPanel } from "@/components/listings/ListingSourcesPanel";
 import { ListingTypeBadge } from "@/components/listings/ListingTypeBadge";
@@ -29,6 +32,7 @@ import { formatLocation, propertyTypeLabel } from "@/lib/format/listing";
 import { formatPrice, priceSuffix } from "@/lib/format/price";
 import { getProfile } from "@/lib/auth/getProfile";
 import { getUser } from "@/lib/auth/getUser";
+import { fetchChannelSnapshot } from "@/lib/listings/channel-snapshot";
 import { fetchListingById } from "@/lib/listings/query";
 import { fetchRecommendations } from "@/lib/listings/recommendations";
 import { getSavedListingIds, isListingSaved } from "@/lib/listings/saved";
@@ -90,11 +94,15 @@ export default async function ListingDetailPage({
   // user-facing render on the write. Status-guarded inside bumpViewCount.
   after(() => bumpViewCount(listing.id));
 
-  const [initialSaved, profile, recommendations] = await Promise.all([
-    user ? isListingSaved(user.id, listing.id) : Promise.resolve(false),
-    user ? getProfile(user.id) : Promise.resolve(null),
-    fetchRecommendations(listing, 6),
-  ]);
+  const [initialSaved, profile, recommendations, channelSnapshot] =
+    await Promise.all([
+      user ? isListingSaved(user.id, listing.id) : Promise.resolve(false),
+      user ? getProfile(user.id) : Promise.resolve(null),
+      fetchRecommendations(listing, 6),
+      listing.primarySource
+        ? fetchChannelSnapshot(listing.primarySource.channelUsername)
+        : Promise.resolve(null),
+    ]);
 
   // Hydrate which recommendations the current user has already saved
   // so each card's save icon renders correctly on first paint. Single
@@ -335,7 +343,14 @@ export default async function ListingDetailPage({
           )}
         </div>
 
-        <aside className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-20 lg:self-start">
+        {/*
+          aside is no longer sticky: with the new data cards it can be
+          taller than a laptop viewport, and sticky would just pin the
+          top half while the rest stayed below the fold. Letting it
+          scroll naturally with the main column reads better and shows
+          the visitor every card.
+        */}
+        <aside className="flex min-w-0 flex-col gap-4">
           <ListingSourcesPanel
             primary={listing.primarySource}
             additional={listing.additionalSources}
@@ -368,6 +383,16 @@ export default async function ListingDetailPage({
               </Button>
             )}
           </Card>
+
+          {/* New data-dense cards filling the previously-empty aside
+              space on desktop. Each renders null when it has nothing
+              useful to show, so sparse listings see a shorter column
+              rather than empty boxes. */}
+          <ListingFullDetails listing={listing} />
+          <ListingActivity listing={listing} />
+          {channelSnapshot && (
+            <ListingChannelSnapshot snapshot={channelSnapshot} />
+          )}
         </aside>
       </div>
     </div>
