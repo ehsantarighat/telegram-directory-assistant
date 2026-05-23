@@ -242,19 +242,27 @@ async function materializeListing(input: {
   mediaUrls: string[];
   extracted: ExtractedListing;
 }): Promise<MaterializeOutcome> {
-  // Re-ingestion safety: if a listing already owns this raw_post as its
-  // primary source, skip (the raw post was processed in a prior run).
-  const existing = await db
-    .select({ id: listings.id })
-    .from(listings)
-    .where(
-      and(
-        eq(listings.primaryRawPostId, input.rawPostId),
-        eq(listings.status, "active"),
-      ),
-    )
+  // Re-ingestion safety: if THIS raw_post already has a listing_sources
+  // row, skip — it was processed in a prior run (either as primary or
+  // as a dedup-attached secondary). The earlier version of this guard
+  // only checked listings.primary_raw_post_id, which missed the
+  // secondary-source case. On re-sync the LLM extractor produces
+  // slightly different fields → dedup matches a different listing →
+  // a SECOND listing_sources row gets inserted for the same raw_post.
+  // Over many syncs that inflates distinct-listings-per-channel above
+  // distinct-raw-posts-per-channel, which is mathematically nonsensical.
+  //
+  // The DB-level unique index on listing_sources.raw_telegram_post_id
+  // (added in migration 0002) backs this up — a second insert for the
+  // same raw_post would fail at the DB level even if this check were
+  // bypassed. The app-level check just keeps us from doing dedup work
+  // and an LLM call that we'd then have to throw away.
+  const existingSource = await db
+    .select({ id: listingSources.id })
+    .from(listingSources)
+    .where(eq(listingSources.rawTelegramPostId, input.rawPostId))
     .limit(1);
-  if (existing.length > 0) {
+  if (existingSource.length > 0) {
     await db
       .update(rawTelegramPosts)
       .set({ processingStatus: "processed" })

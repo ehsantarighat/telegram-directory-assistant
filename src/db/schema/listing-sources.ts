@@ -44,8 +44,17 @@ export const listingSources = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("listing_sources_listing_raw_unique").on(
-      table.listingId,
+    // A raw Telegram post is attributed to exactly one listing — either
+    // the listing it created (primary) or the canonical listing it
+    // deduped to. The old `(listing_id, raw_post_id)` unique permitted
+    // multiple listing_sources rows per raw_post (one per matched
+    // listing), which LLM non-determinism on re-syncs exploited:
+    // different extractions matched different listings, accumulating
+    // phantom rows and inflating per-channel listing counts above
+    // raw-post counts. Tightening to UNIQUE(raw_post_id) makes that
+    // mathematically impossible at the DB level. Migration 0002 cleans
+    // up existing duplicates before swapping the index.
+    uniqueIndex("listing_sources_raw_post_unique").on(
       table.rawTelegramPostId,
     ),
     index("listing_sources_listing_idx").on(table.listingId),
