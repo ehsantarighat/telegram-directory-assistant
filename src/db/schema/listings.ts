@@ -109,6 +109,9 @@ export const listings = pgTable(
     savedCount: bigint("saved_count", { mode: "number" })
       .notNull()
       .default(0),
+    viewCount: bigint("view_count", { mode: "number" })
+      .notNull()
+      .default(0),
     duplicateGroupId: uuid("duplicate_group_id"),
 
     // Lifecycle

@@ -35,6 +35,7 @@ export const sortSchema = z.enum([
   "price_asc",
   "price_desc",
   "most_saved",
+  "most_viewed",
 ]);
 
 /**
@@ -131,6 +132,7 @@ export type ListingsListItem = {
   mediaUrls: string[];
   sourceCount: number;
   savedCount: number;
+  viewCount: number;
   publishedAt: string | null;
   primaryChannel: {
     id: string;
@@ -288,6 +290,13 @@ export async function fetchListings(q: ListingsQuery): Promise<ListingsPage> {
         );
       }
       break;
+    case "most_viewed":
+      if (decoded) {
+        conditions.push(
+          sql`(${listings.viewCount}, ${listings.id}) < (${decoded.k}::bigint, ${decoded.id})`,
+        );
+      }
+      break;
     case "newest":
     default:
       if (decoded) {
@@ -305,6 +314,8 @@ export async function fetchListings(q: ListingsQuery): Promise<ListingsPage> {
         return [desc(listings.price), desc(listings.id)];
       case "most_saved":
         return [desc(listings.savedCount), desc(listings.id)];
+      case "most_viewed":
+        return [desc(listings.viewCount), desc(listings.id)];
       case "newest":
       default:
         return [desc(listings.publishedAt), desc(listings.id)];
@@ -333,6 +344,7 @@ export async function fetchListings(q: ListingsQuery): Promise<ListingsPage> {
       mediaUrls: listings.mediaUrls,
       sourceCount: listings.sourceCount,
       savedCount: listings.savedCount,
+      viewCount: listings.viewCount,
       publishedAt: listings.publishedAt,
       primaryRawPostId: listings.primaryRawPostId,
     })
@@ -399,6 +411,7 @@ export async function fetchListings(q: ListingsQuery): Promise<ListingsPage> {
     mediaUrls: r.mediaUrls,
     sourceCount: r.sourceCount,
     savedCount: r.savedCount,
+    viewCount: r.viewCount,
     publishedAt: r.publishedAt?.toISOString() ?? null,
     primaryChannel: channelMap.get(r.id) ?? null,
   }));
@@ -414,6 +427,8 @@ export async function fetchListings(q: ListingsQuery): Promise<ListingsPage> {
           return last.price ?? "0";
         case "most_saved":
           return last.savedCount;
+        case "most_viewed":
+          return last.viewCount;
         case "newest":
         default:
           return last.publishedAt?.toISOString() ?? "";
@@ -504,6 +519,7 @@ export async function fetchListingById(id: string) {
     mediaUrls: row.listing.mediaUrls,
     sourceCount: row.listing.sourceCount,
     savedCount: row.listing.savedCount,
+    viewCount: row.listing.viewCount,
     duplicateGroupId: row.listing.duplicateGroupId,
     status: row.listing.status,
     publishedAt: row.listing.publishedAt?.toISOString() ?? null,

@@ -81,6 +81,7 @@ export async function fetchSavedListings(
       mediaUrls: listings.mediaUrls,
       sourceCount: listings.sourceCount,
       savedCount: listings.savedCount,
+      viewCount: listings.viewCount,
       publishedAt: listings.publishedAt,
       savedAt: savedListings.createdAt,
     })
@@ -140,6 +141,7 @@ export async function fetchSavedListings(
     mediaUrls: r.mediaUrls,
     sourceCount: r.sourceCount,
     savedCount: r.savedCount,
+    viewCount: r.viewCount,
     publishedAt: r.publishedAt?.toISOString() ?? null,
     primaryChannel: channelMap.get(r.id) ?? null,
   }));

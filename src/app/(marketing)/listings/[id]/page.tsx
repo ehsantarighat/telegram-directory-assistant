@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
+import { after } from "next/server";
 import {
   BookmarkIcon,
   ExternalLinkIcon,
+  EyeIcon,
   GitMergeIcon,
   MapPinIcon,
 } from "lucide-react";
@@ -28,6 +30,7 @@ import { getProfile } from "@/lib/auth/getProfile";
 import { getUser } from "@/lib/auth/getUser";
 import { fetchListingById } from "@/lib/listings/query";
 import { isListingSaved } from "@/lib/listings/saved";
+import { bumpViewCount } from "@/lib/listings/views";
 import { translateListing } from "@/lib/translation";
 import type { TargetLanguage } from "@/lib/translation/types";
 
@@ -80,6 +83,10 @@ export default async function ListingDetailPage({
     getUser(),
   ]);
   if (!listing) notFound();
+
+  // Bump the view counter after the response is sent — never block the
+  // user-facing render on the write. Status-guarded inside bumpViewCount.
+  after(() => bumpViewCount(listing.id));
 
   const [initialSaved, profile] = await Promise.all([
     user ? isListingSaved(user.id, listing.id) : Promise.resolve(false),
@@ -196,6 +203,14 @@ export default async function ListingDetailPage({
                   {price}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+                    title={`${listing.viewCount.toLocaleString()} ${listing.viewCount === 1 ? "view" : "views"}`}
+                  >
+                    <EyeIcon className="h-3 w-3" aria-hidden />
+                    {listing.viewCount.toLocaleString()}{" "}
+                    {listing.viewCount === 1 ? "view" : "views"}
+                  </span>
                   {listing.savedCount > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
                       <BookmarkIcon className="h-3 w-3" aria-hidden />

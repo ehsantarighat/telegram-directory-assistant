@@ -15,6 +15,7 @@ const OPTIONS = [
   { value: "newest", label: "Newest" },
   { value: "price_asc", label: "Price: low to high" },
   { value: "price_desc", label: "Price: high to low" },
+  { value: "most_viewed", label: "Most viewed" },
   { value: "most_saved", label: "Most saved" },
 ] as const;
 
