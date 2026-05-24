@@ -15,6 +15,7 @@ import { BackToListingsButton } from "@/components/listings/BackToListingsButton
 import { ListingContactCard } from "@/components/listings/ListingContactCard";
 import { LocationMap } from "@/components/listings/LocationMap";
 import { ListingFactsGrid } from "@/components/listings/ListingFactsGrid";
+import { YandexAdSlot } from "@/components/ads/YandexAdSlot";
 import { ListingActivity } from "@/components/listings/ListingActivity";
 import { ListingCard } from "@/components/listings/ListingCard";
 import { ListingChannelSnapshot } from "@/components/listings/ListingChannelSnapshot";
@@ -32,6 +33,7 @@ import { formatLocation, propertyTypeLabel } from "@/lib/format/listing";
 import { formatPrice, priceSuffix } from "@/lib/format/price";
 import { getProfile } from "@/lib/auth/getProfile";
 import { getUser } from "@/lib/auth/getUser";
+import { env } from "@/lib/env";
 import { fetchChannelSnapshot } from "@/lib/listings/channel-snapshot";
 import { fetchListingById } from "@/lib/listings/query";
 import { fetchRecommendations } from "@/lib/listings/recommendations";
@@ -392,6 +394,14 @@ export default async function ListingDetailPage({
           <ListingActivity listing={listing} />
           {channelSnapshot && (
             <ListingChannelSnapshot snapshot={channelSnapshot} />
+          )}
+          {/* Yandex.Direct slot at the bottom of the aside. Skipped
+              for admins (annoying for the operator) and for any
+              build where the block id env is unset. */}
+          {profile?.role !== "admin" && (
+            <YandexAdSlot
+              blockId={env.NEXT_PUBLIC_YANDEX_AD_DETAIL_BLOCK_ID}
+            />
           )}
         </aside>
       </div>

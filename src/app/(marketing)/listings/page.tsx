@@ -1,5 +1,6 @@
 import { CompassIcon } from "lucide-react";
 
+import { YandexAdSlot } from "@/components/ads/YandexAdSlot";
 import { ActiveFilterChips } from "@/components/filters/ActiveFilterChips";
 import { FiltersDrawer } from "@/components/filters/FiltersDrawer";
 import { ListingsUrlMemory } from "@/components/listings/ListingsUrlMemory";
@@ -8,6 +9,7 @@ import { SaveSearchButton } from "@/components/search/SaveSearchButton";
 import { SearchBar } from "@/components/search/SearchBar";
 import { SortSelect } from "@/components/search/SortSelect";
 import { EmptyState } from "@/components/states/EmptyState";
+import { env } from "@/lib/env";
 import { getUser } from "@/lib/auth/getUser";
 import {
   fetchListingFacets,
@@ -119,6 +121,14 @@ export default async function ListingsPage({
           savedIds={savedIds}
         />
       )}
+
+      {/* Yandex.Direct slot at the bottom of the feed. Renders nothing
+          when the block id env is unset (e.g., before Yandex
+          partner approval lands). */}
+      <YandexAdSlot
+        blockId={env.NEXT_PUBLIC_YANDEX_AD_FEED_BLOCK_ID}
+        className="mt-6"
+      />
     </div>
   );
 }

@@ -1,0 +1,11 @@
+# ads.txt — IAB authorized sellers declaration.
+#
+# Replace <YOUR_YANDEX_PARTNER_ID> with the partner id Yandex
+# assigns after your site is approved (find it at
+# partner.yandex.ru → Settings → Account info → "ID партнёра").
+#
+# Until then this file just declares we serve no ads — that's
+# fine, ad networks reading this URL ignore unrecognized lines.
+#
+# Format spec: https://iabtechlab.com/ads-txt/
+# yandex.com, <YOUR_YANDEX_PARTNER_ID>, DIRECT, 8b0ed3e64f7e8de6
