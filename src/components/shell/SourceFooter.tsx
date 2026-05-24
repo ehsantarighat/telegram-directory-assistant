@@ -18,12 +18,18 @@ export function SourceFooter() {
           We index public Telegram posts — every listing links back to
           its original source.
         </p>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
           <Link href="/listings" className="hover:text-foreground">
             Browse listings
           </Link>
           <Link href="/suggest-channel" className="hover:text-foreground">
             Suggest a channel
+          </Link>
+          <Link href="/privacy" className="hover:text-foreground">
+            Privacy
+          </Link>
+          <Link href="/terms" className="hover:text-foreground">
+            Terms
           </Link>
         </div>
       </div>
