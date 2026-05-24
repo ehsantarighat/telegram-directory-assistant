@@ -47,6 +47,16 @@ const clientSchema = z.object({
   // partner account is approved and you've created the blocks.
   NEXT_PUBLIC_YANDEX_AD_FEED_BLOCK_ID: z.string().min(1).optional(),
   NEXT_PUBLIC_YANDEX_AD_DETAIL_BLOCK_ID: z.string().min(1).optional(),
+  // Google AdSense publisher id + per-slot ad unit ids.
+  //   - CLIENT_ID format: "ca-pub-XXXXXXXXXXXXXXXX" (AdSense → Account
+  //     → Account information → Publisher ID)
+  //   - SLOT format: "1234567890" (AdSense → Ads → By ad unit → Get
+  //     code → look for `data-ad-slot`)
+  // All three optional. When any are unset, GoogleAdSlot renders null
+  // — letting you deploy the wiring before AdSense approval lands.
+  NEXT_PUBLIC_GOOGLE_ADSENSE_CLIENT_ID: z.string().min(1).optional(),
+  NEXT_PUBLIC_GOOGLE_ADSENSE_FEED_SLOT: z.string().min(1).optional(),
+  NEXT_PUBLIC_GOOGLE_ADSENSE_DETAIL_SLOT: z.string().min(1).optional(),
 });
 
 function parse<T extends z.ZodTypeAny>(
@@ -96,6 +106,15 @@ function getValidatedEnv(): Env {
     ),
     NEXT_PUBLIC_YANDEX_AD_DETAIL_BLOCK_ID: nz(
       process.env.NEXT_PUBLIC_YANDEX_AD_DETAIL_BLOCK_ID,
+    ),
+    NEXT_PUBLIC_GOOGLE_ADSENSE_CLIENT_ID: nz(
+      process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_CLIENT_ID,
+    ),
+    NEXT_PUBLIC_GOOGLE_ADSENSE_FEED_SLOT: nz(
+      process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_FEED_SLOT,
+    ),
+    NEXT_PUBLIC_GOOGLE_ADSENSE_DETAIL_SLOT: nz(
+      process.env.NEXT_PUBLIC_GOOGLE_ADSENSE_DETAIL_SLOT,
     ),
   });
   cached = Object.freeze({ ...server, ...client });
