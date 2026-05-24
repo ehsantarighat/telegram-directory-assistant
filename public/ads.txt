@@ -16,4 +16,4 @@
 # after "ca-" in your client id; AdSense → Account → Account information
 # → Publisher ID). The certification id below is Google's fixed value
 # and never changes.
-# google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0
+google.com, pub-3998116939667698, DIRECT, f08c47fec0942fa0
