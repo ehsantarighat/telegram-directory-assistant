@@ -16,6 +16,18 @@ export type AdminChannel = TelegramChannel & {
   rawPostsCount: number;
   /** Distinct active listings where this channel is a source. */
   listingsCount: number;
+  /**
+   * Computed at query time. Encodes when the cron will next pick up
+   * this channel. The page renders this directly — keeps Date.now()
+   * out of the React render path (React 19 strict purity).
+   *
+   *   "off"     → sync_interval_minutes === 0 (admin paused, or runner
+   *               auto-paused after permanent failure)
+   *   "new"     → never been synced (last_synced_at is null)
+   *   "due"     → past the interval; cron will pick up on next tick
+   *   number ≥1 → minutes until cron is allowed to pick it up
+   */
+  nextSyncState: "off" | "new" | "due" | number;
 };
 
 /**
@@ -88,14 +100,27 @@ export async function fetchAdminChannels(opts: {
     listingRows.map((r) => [r.channelId, r.n]),
   );
 
-  const staleCutoff = new Date(Date.now() - STALE_SYNC_MINUTES * 60_000);
+  const nowMs = Date.now();
+  const staleCutoff = new Date(nowMs - STALE_SYNC_MINUTES * 60_000);
   return rows.map((r) => {
     const ch = r.channel;
+    const nextSyncState: AdminChannel["nextSyncState"] =
+      ch.syncIntervalMinutes === 0
+        ? "off"
+        : !ch.lastSyncedAt
+          ? "new"
+          : (() => {
+              const dueAt =
+                ch.lastSyncedAt.getTime() + ch.syncIntervalMinutes * 60_000;
+              const msUntil = dueAt - nowMs;
+              return msUntil <= 0 ? "due" : Math.ceil(msUntil / 60_000);
+            })();
     const base: AdminChannel = {
       ...ch,
       categoryName: r.categoryName,
       rawPostsCount: postsByChannel.get(ch.id) ?? 0,
       listingsCount: listingsByChannel.get(ch.id) ?? 0,
+      nextSyncState,
     };
     // Detect stalled syncs at read time. We don't write back — that
     // would race with a sync that's actually still alive. UI uses

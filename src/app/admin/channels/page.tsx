@@ -6,10 +6,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/states/EmptyState";
 import { fetchActiveCategories } from "@/lib/channel-suggestions/queries";
-import { fetchAdminChannels } from "@/lib/admin/channel-queries";
+import {
+  fetchAdminChannels,
+  type AdminChannel,
+} from "@/lib/admin/channel-queries";
 import { formatRelative } from "@/lib/format/date";
 import { cn } from "@/lib/utils";
 
+import { AutoRefresh } from "./AutoRefresh";
 import { ChannelFormDialog } from "./ChannelFormDialog";
 import { ChannelStatusForm } from "./ChannelStatusForm";
 import { SyncButton } from "./SyncButton";
@@ -41,6 +45,9 @@ export default async function AdminChannelsPage() {
       description="Add, enable, disable, and tag the Telegram channels we ingest from."
       actions={<ChannelFormDialog categories={pickerCategories} mode="add" />}
     >
+      {/* Polls the server every 30s so cron-driven sync activity
+          shows up without the admin having to manually F5. */}
+      <AutoRefresh intervalSec={30} className="mb-3 justify-end" />
       {channels.length === 0 ? (
         <EmptyState
           icon={Radio}
@@ -147,6 +154,7 @@ export default async function AdminChannelsPage() {
                       ) : c.lastSyncedAt ? (
                         <div className="flex flex-col gap-0.5 max-w-xs">
                           <span>{formatRelative(c.lastSyncedAt)}</span>
+                          <NextSyncHint state={c.nextSyncState} />
                           {c.lastSyncError && (
                             <span className="text-destructive whitespace-normal text-pretty leading-snug">
                               ⚠ {c.lastSyncError}
@@ -158,7 +166,7 @@ export default async function AdminChannelsPage() {
                           ⚠ {c.lastSyncError}
                         </span>
                       ) : (
-                        "—"
+                        <NextSyncHint state={c.nextSyncState} />
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -191,5 +199,46 @@ export default async function AdminChannelsPage() {
         </Card>
       )}
     </AdminShell>
+  );
+}
+
+/**
+ * Renders a tiny "Auto-sync in Xm" / "Auto-sync off" hint under the
+ * last-sync timestamp. The state is precomputed in fetchAdminChannels
+ * (channel-queries.ts) — keeping Date.now() out of the React render
+ * tree (React 19 strict purity).
+ *
+ * Helps admins understand why a row's timestamp is stale — they can
+ * see whether the channel is paused, never synced, due now, or just
+ * waiting its turn.
+ */
+function NextSyncHint({ state }: { state: AdminChannel["nextSyncState"] }) {
+  if (state === "off") {
+    return (
+      <span className="text-[11px] text-muted-foreground">
+        Auto-sync off
+      </span>
+    );
+  }
+  if (state === "new") {
+    return (
+      <span className="text-[11px] text-muted-foreground">
+        Auto-sync on next tick
+      </span>
+    );
+  }
+  if (state === "due") {
+    return (
+      <span className="text-[11px] text-amber-600 dark:text-amber-400">
+        Due now (cron will pick up)
+      </span>
+    );
+  }
+  const label =
+    state < 60 ? `${state}m` : `${Math.floor(state / 60)}h ${state % 60}m`;
+  return (
+    <span className="text-[11px] text-muted-foreground">
+      Auto-sync in {label}
+    </span>
   );
 }
