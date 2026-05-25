@@ -87,20 +87,59 @@ export async function suggestChannelAction(
     return { fieldErrors: { categoryId: "Unknown category" } };
   }
 
-  // 3) Reject if the channel is already in our active telegram_channels
-  const existingChannel = await db
-    .select({ id: telegramChannels.id })
+  // 3) Decide whether the channel already exists in telegram_channels.
+  //
+  // We branch on `status` because the old code rejected ANY row by
+  // username — including `removed` channels (admin took them out) and
+  // `disabled` ones (admin paused them). That meant every user
+  // suggesting a previously-removed channel got the misleading
+  // "already in our directory" error, even though the channel is NOT
+  // in the directory anymore. Now:
+  //
+  //   - active     → genuinely in the directory; reject the suggestion
+  //                  (with a positive, non-scary message)
+  //   - pending    → admin is processing it; tell user to wait
+  //   - disabled   → admin paused it (rate-limit, broken, etc.); tell
+  //                  user it's known but currently off
+  //   - removed    → admin deliberately removed it; ALLOW the
+  //                  suggestion through so the admin sees the demand
+  //                  signal and can decide whether to resurrect via
+  //                  the existing upsert-channel resurrect path
+  //   - (no row)   → allow normally
+  const [existingChannel] = await db
+    .select({
+      id: telegramChannels.id,
+      status: telegramChannels.status,
+    })
     .from(telegramChannels)
     .where(eq(telegramChannels.username, normalized.username))
     .limit(1);
-  if (existingChannel.length > 0) {
+
+  if (existingChannel && existingChannel.status !== "removed") {
+    if (existingChannel.status === "active") {
+      return {
+        ok: true,
+        message: `@${normalized.username} is already in our directory — go to /listings to browse it.`,
+      };
+    }
+    if (existingChannel.status === "pending") {
+      return {
+        ok: true,
+        message: `@${normalized.username} is already being added by an admin — give it a few minutes and refresh /listings.`,
+      };
+    }
+    // disabled
     return {
-      error: `@${normalized.username} is already in our directory — no need to suggest it.`,
+      ok: true,
+      message: `@${normalized.username} is known but currently paused by an admin. We've noted your interest.`,
     };
   }
 
-  // 4) Reject if THIS user already submitted a pending suggestion for it
-  const duplicatePending = await db
+  // 4) Inform (don't reject) if THIS user already submitted a pending
+  // suggestion for the same channel. Treat the duplicate as a no-op
+  // success — re-submitting is a common confused-user action, and
+  // pretending it failed adds friction without protecting anything.
+  const [duplicatePending] = await db
     .select({ id: channelSuggestions.id })
     .from(channelSuggestions)
     .where(
@@ -111,9 +150,10 @@ export async function suggestChannelAction(
       ),
     )
     .limit(1);
-  if (duplicatePending.length > 0) {
+  if (duplicatePending) {
     return {
-      error: `You've already suggested @${normalized.username}. Admins are reviewing it.`,
+      ok: true,
+      message: `@${normalized.username} is already in your review queue — admins will get to it.`,
     };
   }
 
