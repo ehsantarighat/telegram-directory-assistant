@@ -112,15 +112,32 @@ async function main() {
     } catch (err) {
       const elapsed = Math.round((Date.now() - channelStarted) / 1000);
       const message = err instanceof Error ? err.message : String(err);
-      // ingestChannel writes lastSyncStatus='error' itself on per-post
-      // catastrophic failure. On runner-level catches we also stamp the
-      // channel so the admin UI shows what went wrong.
+
+      // Detect permanent failures that won't self-heal. For these we
+      // also set sync_interval_minutes = 0 so the cron stops retrying
+      // every tick (which wastes Telegram requests and floods the
+      // admin error column with the same message forever). The admin
+      // can re-enable auto-sync in the channel edit form once the
+      // underlying issue is fixed on the Telegram side. Manual "Run
+      // sync" from /admin/channels still works either way.
+      //
+      // Patterns considered permanent:
+      //   - "has no public web preview" → channel admin disabled
+      //     /s/<username> previews; can only be re-enabled by them
+      //   - "Telegram returned HTTP 404" → channel was deleted; not
+      //     coming back via this username
+      const isPermanent =
+        /has no public web preview|HTTP 404/i.test(message);
+
       try {
         await db
           .update(telegramChannels)
           .set({
             lastSyncStatus: "error",
-            lastSyncError: message.slice(0, 200),
+            lastSyncError: isPermanent
+              ? `${message.slice(0, 160)} — auto-sync paused; re-enable in channel settings if fixed`
+              : message.slice(0, 200),
+            ...(isPermanent ? { syncIntervalMinutes: 0 } : {}),
             updatedAt: new Date(),
           })
           .where(eq(telegramChannels.id, ch.id));
@@ -128,7 +145,9 @@ async function main() {
         // ignore — we're already in an error branch
       }
       console.error(
-        `[sync:due] @${ch.username} FAILED in ${elapsed}s — ${message}`,
+        `[sync:due] @${ch.username} FAILED in ${elapsed}s ${
+          isPermanent ? "(permanent — auto-sync paused) " : ""
+        }— ${message}`,
       );
       errorCount += 1;
     }
