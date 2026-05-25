@@ -26,8 +26,10 @@ export async function fetchRecommendations(
 
   const priceNum = forListing.price ? parseFloat(forListing.price) : null;
   const sameCurrency = forListing.currency ?? undefined;
+  // city/district are multi-select on the query side now (string[]),
+  // so wrap single values in arrays.
   const baseFilters = {
-    city: forListing.city,
+    city: [forListing.city],
     type: forListing.listingType,
     currency: sameCurrency,
     sort: "newest" as const,
@@ -49,7 +51,7 @@ export async function fetchRecommendations(
   if (forListing.district && priceNum) {
     const page = await fetchListings({
       ...baseFilters,
-      district: forListing.district,
+      district: [forListing.district],
       minPrice: priceNum * 0.7,
       maxPrice: priceNum * 1.3,
       limit,

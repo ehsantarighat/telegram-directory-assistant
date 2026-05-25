@@ -190,24 +190,30 @@ function FiltersForm({
               </div>
             </section>
 
-            {/* Location */}
-            <section className="grid grid-cols-2 gap-3">
-              <Field label="City">
-                <SelectClearable
-                  value={draft.city}
-                  onChange={(v) => setDraft((d) => ({ ...d, city: v }))}
-                  placeholder="Any"
-                  options={facets.cities.map((c) => ({ value: c, label: c }))}
-                />
-              </Field>
-              <Field label="District">
-                <SelectClearable
-                  value={draft.district}
-                  onChange={(v) => setDraft((d) => ({ ...d, district: v }))}
-                  placeholder="Any"
-                  options={facets.districts.map((d) => ({ value: d, label: d }))}
-                />
-              </Field>
+            {/* Location — multi-select. Empty array == "no filter". */}
+            <section className="grid gap-4">
+              <MultiToggleField
+                label="City"
+                values={draft.city ?? []}
+                options={facets.cities}
+                onChange={(next) =>
+                  setDraft((d) => ({
+                    ...d,
+                    city: next.length > 0 ? next : undefined,
+                  }))
+                }
+              />
+              <MultiToggleField
+                label="District"
+                values={draft.district ?? []}
+                options={facets.districts}
+                onChange={(next) =>
+                  setDraft((d) => ({
+                    ...d,
+                    district: next.length > 0 ? next : undefined,
+                  }))
+                }
+              />
             </section>
 
             {/* Price */}
@@ -528,6 +534,73 @@ function BooleanToggle({
         {display}
       </span>
     </Button>
+  );
+}
+
+/**
+ * Multi-select chip list. Each option is a Toggle; clicking adds or
+ * removes the value from the selected array. Scrollable when long so
+ * districts (~40+) don't blow up the drawer height.
+ *
+ * Shows a per-section "Clear N" link when anything's selected — quick
+ * way to drop the whole category without clicking each chip.
+ */
+function MultiToggleField({
+  label,
+  values,
+  options,
+  onChange,
+}: {
+  label: string;
+  values: string[];
+  options: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const selected = new Set(values);
+  const toggle = (opt: string) => {
+    const next = new Set(selected);
+    if (next.has(opt)) next.delete(opt);
+    else next.add(opt);
+    // Preserve facet order so the URL is stable across re-renders;
+    // arrays in random order would churn the URL on every re-select.
+    onChange(options.filter((o) => next.has(o)));
+  };
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {label}
+          {values.length > 0 && (
+            <span className="ms-1.5 rounded-full bg-muted px-1.5 py-0.5 text-[10px] normal-case tracking-normal text-foreground">
+              {values.length}
+            </span>
+          )}
+        </h3>
+        {values.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange([])}
+            className="text-[11px] text-muted-foreground hover:text-foreground"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+      {options.length === 0 ? (
+        <p className="text-xs text-muted-foreground">No options available.</p>
+      ) : (
+        <div className="flex max-h-48 flex-wrap gap-1.5 overflow-y-auto rounded-md border border-border/50 p-2">
+          {options.map((opt) => (
+            <Toggle
+              key={opt}
+              label={opt}
+              active={selected.has(opt)}
+              onClick={() => toggle(opt)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -59,8 +59,32 @@ export const listingsQuerySchema = z.object({
   // Primary
   type: listingTypeSchema.optional(),
   propertyType: propertyTypeSchema.optional(),
-  city: z.string().min(1).max(64).optional(),
-  district: z.string().min(1).max(64).optional(),
+  // City and district are multi-select. URL format is a single
+  // comma-separated key (e.g. ?city=Tashkent,Samarkand) — preprocessed
+  // here into a string[]. Empty values are stripped so a stray comma
+  // or empty pick doesn't widen the IN-clause.
+  city: z
+    .preprocess(
+      (v) =>
+        typeof v === "string"
+          ? v
+              .split(",")
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0)
+          : v,
+      z.array(z.string().min(1).max(64)).optional(),
+    ),
+  district: z
+    .preprocess(
+      (v) =>
+        typeof v === "string"
+          ? v
+              .split(",")
+              .map((s) => s.trim())
+              .filter((s) => s.length > 0)
+          : v,
+      z.array(z.string().min(1).max(64)).optional(),
+    ),
   channelUsername: z.string().min(1).max(64).optional(),
   q: z.string().trim().min(1).max(120).optional(),
 
@@ -197,8 +221,13 @@ export async function fetchListings(q: ListingsQuery): Promise<ListingsPage> {
   if (q.type) conditions.push(eq(listings.listingType, q.type));
   if (q.propertyType)
     conditions.push(eq(listings.propertyType, q.propertyType));
-  if (q.city) conditions.push(eq(listings.city, q.city));
-  if (q.district) conditions.push(eq(listings.district, q.district));
+  // Multi-value: IN(...) when any cities/districts selected. Empty
+  // array means "no filter" (parseFilters strips empties before
+  // passing through, so checking length > 0 is just defensive).
+  if (q.city && q.city.length > 0)
+    conditions.push(inArray(listings.city, q.city));
+  if (q.district && q.district.length > 0)
+    conditions.push(inArray(listings.district, q.district));
   if (q.currency) conditions.push(eq(listings.currency, q.currency));
   if (q.rooms !== undefined) conditions.push(eq(listings.rooms, q.rooms));
   if (q.minPrice !== undefined)

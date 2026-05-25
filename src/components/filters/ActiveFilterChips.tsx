@@ -23,9 +23,32 @@ export function ActiveFilterChips({ className }: { className?: string }) {
   const chips = collectChips(filters);
   if (chips.length === 0) return null;
 
-  const removeFilter = (key: keyof FilterState) => {
+  /**
+   * Drop one filter value. For multi-value keys (city, district) we
+   * remove just `chipValue` from the comma-list and keep the rest;
+   * dropping the last value clears the key entirely. For everything
+   * else we delete the key outright.
+   */
+  const removeFilter = (key: keyof FilterState, chipValue?: string) => {
     const next = new URLSearchParams(searchParams.toString());
-    next.delete(key as string);
+    if ((key === "city" || key === "district") && chipValue) {
+      const current = next.get(key);
+      if (current) {
+        const remaining = current
+          .split(",")
+          .map((s) => s.trim())
+          .filter((s) => s.length > 0 && s !== chipValue);
+        if (remaining.length > 0) {
+          next.set(key, remaining.join(","));
+        } else {
+          next.delete(key);
+        }
+      } else {
+        next.delete(key);
+      }
+    } else {
+      next.delete(key as string);
+    }
     next.delete("cursor");
     router.replace(`?${next.toString()}`, { scroll: false });
   };
@@ -43,7 +66,7 @@ export function ActiveFilterChips({ className }: { className?: string }) {
     <div className={cn("flex flex-wrap items-center gap-1.5", className)}>
       {chips.map((chip) => (
         <Badge
-          key={chip.key}
+          key={`${chip.key}:${chip.value}`}
           variant="secondary"
           className="gap-1 rounded-full pe-1 ps-2.5 text-xs"
         >
@@ -53,8 +76,8 @@ export function ActiveFilterChips({ className }: { className?: string }) {
             type="button"
             variant="ghost"
             size="icon-xs"
-            onClick={() => removeFilter(chip.key)}
-            aria-label={`Remove filter ${chip.label}`}
+            onClick={() => removeFilter(chip.key, chip.value)}
+            aria-label={`Remove filter ${chip.label} ${chip.value}`}
             className="size-5 rounded-full hover:bg-background"
           >
             <XIcon className="h-3 w-3" aria-hidden />
@@ -90,9 +113,18 @@ function collectChips(state: FilterState): Chip[] {
       label: "Property",
       value: propertyTypeLabel[state.propertyType],
     });
-  if (state.city) out.push({ key: "city", label: "City", value: state.city });
-  if (state.district)
-    out.push({ key: "district", label: "District", value: state.district });
+  // Multi-value filters render one chip per selected value, each
+  // individually removable via the chip's × button.
+  if (state.city) {
+    for (const v of state.city) {
+      out.push({ key: "city", label: "City", value: v });
+    }
+  }
+  if (state.district) {
+    for (const v of state.district) {
+      out.push({ key: "district", label: "District", value: v });
+    }
+  }
   if (state.channelUsername)
     out.push({
       key: "channelUsername",

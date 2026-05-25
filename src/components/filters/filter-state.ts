@@ -17,8 +17,13 @@ export type FilterState = {
     | "land"
     | "room"
     | "studio";
-  city?: string;
-  district?: string;
+  // City and district are multi-select. Empty array == "no filter".
+  // URL format: comma-separated single key, e.g.
+  // ?city=Tashkent,Samarkand&district=Mirobod,Yunusabad
+  // (chosen over repeated keys to keep the URL shorter and to avoid
+  // touching flatten() in the page which collapses arrays.)
+  city?: string[];
+  district?: string[];
   channelUsername?: string;
 
   // Money
@@ -57,8 +62,6 @@ const STRING_KEYS = [
   "q",
   "type",
   "propertyType",
-  "city",
-  "district",
   "channelUsername",
   "minPrice",
   "maxPrice",
@@ -74,6 +77,9 @@ const STRING_KEYS = [
   "ownerOrAgent",
   "sort",
 ] as const;
+
+// Multi-value keys serialized as comma-separated strings.
+const ARRAY_KEYS = ["city", "district"] as const;
 
 const BOOLEAN_KEYS = [
   "hasPhotos",
@@ -101,6 +107,18 @@ export function parseFilters(
       (state as Record<string, unknown>)[key] = v;
     }
   }
+  for (const key of ARRAY_KEYS) {
+    const v = get(key);
+    if (v && v.length > 0) {
+      const arr = v
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      if (arr.length > 0) {
+        (state as Record<string, unknown>)[key] = arr;
+      }
+    }
+  }
   for (const key of BOOLEAN_KEYS) {
     const v = get(key);
     if (v === "1" || v === "true") {
@@ -118,6 +136,12 @@ export function serializeFilters(state: FilterState): URLSearchParams {
     const v = state[key];
     if (v != null && String(v).length > 0) params.set(key, String(v));
   }
+  for (const key of ARRAY_KEYS) {
+    const v = state[key];
+    if (Array.isArray(v) && v.length > 0) {
+      params.set(key, v.join(","));
+    }
+  }
   for (const key of BOOLEAN_KEYS) {
     const v = state[key];
     if (v === true) params.set(key, "1");
@@ -132,6 +156,12 @@ export function countActiveFilters(state: FilterState): number {
   for (const key of STRING_KEYS) {
     if (key === "sort") continue;
     if (state[key] != null && String(state[key]).length > 0) n++;
+  }
+  for (const key of ARRAY_KEYS) {
+    const v = state[key];
+    // Each selected value is a separate filter from the user's
+    // perspective (and increments the badge count individually).
+    if (Array.isArray(v)) n += v.length;
   }
   for (const key of BOOLEAN_KEYS) {
     if (state[key] != null) n++;
