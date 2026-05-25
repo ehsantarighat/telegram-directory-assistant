@@ -37,6 +37,7 @@ type Defaults = {
   country?: string;
   city?: string;
   language?: string;
+  syncIntervalMinutes?: number;
 };
 
 type Props = {
@@ -166,6 +167,24 @@ export function ChannelFormDialog({
               placeholder="ru, uz, en, fa"
               maxLength={8}
             />
+          </Field>
+
+          <Field
+            label="Auto-sync interval (minutes)"
+            error={state.fieldErrors?.syncIntervalMinutes}
+          >
+            <Input
+              name="syncIntervalMinutes"
+              type="number"
+              min={0}
+              max={10080}
+              step={5}
+              defaultValue={defaults?.syncIntervalMinutes ?? 60}
+              placeholder="60"
+            />
+            <span className="text-[11px] font-normal normal-case tracking-normal text-muted-foreground">
+              How often the cron picks this channel. 15 = busy channel, 360 = slow channel, 0 = disable auto-sync (manual still works).
+            </span>
           </Field>
 
           {state.error && (

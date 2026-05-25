@@ -178,6 +178,7 @@ export default async function AdminChannelsPage() {
                             country: c.country ?? "",
                             city: c.city ?? "",
                             language: c.language ?? "",
+                            syncIntervalMinutes: c.syncIntervalMinutes,
                           }}
                         />
                       </div>

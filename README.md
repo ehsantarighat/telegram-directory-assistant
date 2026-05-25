@@ -290,6 +290,47 @@ the raw-post layer.
   through the same pipeline.
 - **Auto on channel add**: inserting a channel via the admin form
   immediately triggers an initial backfill (100 posts / 6 months).
+- **Cron (`pnpm sync:due`)**: picks every channel whose
+  `last_synced_at + sync_interval_minutes` has elapsed and syncs them
+  sequentially. See "Auto-sync cadence" below.
+
+### Auto-sync cadence
+
+Each `telegram_channels` row has a `sync_interval_minutes` column
+(default `60`). The admin edit form exposes it — set busy channels to
+`15-30`, slow channels to `360`+, or `0` to disable auto-sync for a
+specific channel (manual **Run sync** still works).
+
+To run the cron automatically, add a **Railway cron service** in the
+same project:
+
+1. Railway dashboard → your project → **+ New service** → **Empty Service**.
+2. Settings → **Source** → connect the same GitHub repo as the web app.
+3. Settings → **Deploy** → **Start command**: `pnpm sync:due`.
+4. Settings → **Cron** → `*/10 * * * *` (every 10 min). Adjust to taste:
+   `*/5` for more frequent, `0 * * * *` for hourly.
+5. Settings → **Variables** → click **"Shared Variables"** so it
+   inherits `DATABASE_URL`, `SUPABASE_*`, `ANTHROPIC_API_KEY` from the
+   web service. Without these the script can't run.
+
+The script exits **0** even when individual channels fail (so the cron
+doesn't keep alerting). Per-channel failures show up in the admin
+**/admin/channels** page like any other sync — `lastSyncError` carries
+a readable summary.
+
+**Tick-vs-cadence interplay**: the cron tick should be **lower** than
+your shortest `sync_interval_minutes`. A 60-min interval with a 10-min
+cron tick means the channel is checked 6 times per hour, but only
+synced once (when its interval has elapsed). A 60-min interval with a
+60-min cron tick can drift to 119 min between syncs in the worst case
+— so keep the tick frequent and let the per-channel intervals do the
+scheduling.
+
+**External alternative** (cron-job.org, GitHub Actions): also works.
+Expose `pnpm sync:due` behind a `/api/cron/sync` endpoint protected by
+a `CRON_SECRET` header check, then point an external scheduler at it.
+Adds a network hop and a shared secret to manage, but works if you
+don't want a second Railway service.
 
 ---
 

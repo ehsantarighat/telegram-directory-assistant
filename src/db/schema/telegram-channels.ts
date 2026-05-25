@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   bigint,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -44,6 +45,17 @@ export const telegramChannels = pgTable(
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
     lastSyncStatus: text("last_sync_status"),
     lastSyncError: text("last_sync_error"),
+    /**
+     * Auto-sync cadence in minutes. The cron tick picks channels where
+     *   now() >= last_synced_at + sync_interval_minutes
+     * (or where last_synced_at is null — first sync). Defaults to 60.
+     * Set lower for high-volume channels (e.g. 15) and higher for slow
+     * ones (e.g. 360 = 6h). Set to 0 to disable auto-sync for a channel
+     * (manual sync still works).
+     */
+    syncIntervalMinutes: integer("sync_interval_minutes")
+      .notNull()
+      .default(60),
     postsImportedCount: bigint("posts_imported_count", { mode: "number" })
       .notNull()
       .default(0),

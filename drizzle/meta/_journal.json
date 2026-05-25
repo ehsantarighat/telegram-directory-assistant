@@ -29,6 +29,13 @@
       "when": 1780100000000,
       "tag": "0003_listings_view_count",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780200000000,
+      "tag": "0004_telegram_channels_sync_interval",
+      "breakpoints": true
     }
   ]
 }

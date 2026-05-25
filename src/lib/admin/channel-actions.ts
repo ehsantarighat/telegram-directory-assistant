@@ -19,6 +19,9 @@ const upsertSchema = z.object({
   country: z.string().trim().max(80).optional().or(z.literal("")),
   city: z.string().trim().max(80).optional().or(z.literal("")),
   language: z.string().trim().max(8).optional().or(z.literal("")),
+  // Auto-sync cadence. 0 = disabled, max 10080 = 1 week. Coerce because
+  // FormData entries arrive as strings.
+  syncIntervalMinutes: z.coerce.number().int().min(0).max(10080).default(60),
 });
 
 export type ChannelFormState = {
@@ -52,6 +55,7 @@ export async function upsertChannelAction(
     country: formData.get("country") ?? "",
     city: formData.get("city") ?? "",
     language: formData.get("language") ?? "",
+    syncIntervalMinutes: formData.get("syncIntervalMinutes") ?? 60,
   });
   if (!parsed.success) {
     const fieldErrors: Record<string, string> = {};
@@ -112,6 +116,7 @@ export async function upsertChannelAction(
           country: parsed.data.country || null,
           city: parsed.data.city || null,
           language: parsed.data.language || null,
+          syncIntervalMinutes: parsed.data.syncIntervalMinutes,
           status: "active",
           lastSyncStatus: "running",
           lastSyncError: null,
@@ -140,6 +145,7 @@ export async function upsertChannelAction(
         country: parsed.data.country || null,
         city: parsed.data.city || null,
         language: parsed.data.language || null,
+        syncIntervalMinutes: parsed.data.syncIntervalMinutes,
         updatedAt: new Date(),
       })
       .where(eq(telegramChannels.id, parsed.data.id));
@@ -169,6 +175,7 @@ export async function upsertChannelAction(
       country: parsed.data.country || null,
       city: parsed.data.city || null,
       language: parsed.data.language || null,
+      syncIntervalMinutes: parsed.data.syncIntervalMinutes,
       status: "active",
       lastSyncStatus: "running",
     })
