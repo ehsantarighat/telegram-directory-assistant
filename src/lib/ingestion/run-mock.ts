@@ -13,7 +13,7 @@ async function main() {
   for (const username of targets) {
     const result = await ingestChannel({ source, channelUsername: username });
     console.log(
-      `[mock] ${username}: fetched=${result.fetched} inserted=${result.inserted} skipped=${result.skipped}`,
+      `[mock] ${username}: fetched=${result.fetched} inserted=${result.inserted} skipped=${result.skipped} failed=${result.failed}`,
     );
   }
 

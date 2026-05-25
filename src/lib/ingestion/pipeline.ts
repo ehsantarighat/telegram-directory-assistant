@@ -1,4 +1,4 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -41,6 +41,12 @@ export type IngestResult = {
   inserted: number;
   duplicates: number;
   skipped: number;
+  /**
+   * Posts that threw during processing (LLM timeout, FK violation,
+   * unexpected schema mismatch, etc.). Tracked so one bad post can't
+   * abort the entire sync — we log + count + continue.
+   */
+  failed: number;
 };
 
 /**
@@ -118,39 +124,80 @@ export async function ingestChannel(opts: {
   let inserted = 0;
   let duplicates = 0;
   let skipped = 0;
+  let failed = 0;
   let processed = 0;
+  let firstError: string | null = null;
 
   for (const msg of messages) {
-    const rawRow = await upsertRawPost(channel.id, msg);
-    const extracted = await extractor.extract({
-      text: msg.text,
-      mediaUrls: msg.mediaUrls,
-      channelContext,
-    });
-    if (!extracted) {
-      await db
-        .update(rawTelegramPosts)
-        .set({ processingStatus: "ignored" })
-        .where(eq(rawTelegramPosts.id, rawRow.id));
-      skipped += 1;
-      continue;
+    // Per-post try/catch: one bad post (LLM timeout, unexpected DB
+    // constraint, transient network blip) should never abort the
+    // whole sync. The earlier behavior threw on the first failure,
+    // losing all progress made so far and stamping a confusing
+    // "Failed query: ..." error against the channel.
+    //
+    // We capture the first error for the channel's lastSyncError so
+    // the admin can still diagnose, but successive failures only
+    // increment the counter — we don't want to keep overwriting with
+    // increasingly stale messages.
+    try {
+      const rawRow = await upsertRawPost(channel.id, msg);
+      const extracted = await extractor.extract({
+        text: msg.text,
+        mediaUrls: msg.mediaUrls,
+        channelContext,
+      });
+      if (!extracted) {
+        await db
+          .update(rawTelegramPosts)
+          .set({ processingStatus: "ignored" })
+          .where(eq(rawTelegramPosts.id, rawRow.id));
+        skipped += 1;
+      } else {
+        const outcome = await materializeListing({
+          channelId: channel.id,
+          channelUsername: channel.username,
+          messageId: msg.externalId,
+          rawPostId: rawRow.id,
+          categoryId: cat!.id,
+          publishedAt: msg.postedAt,
+          originalPostUrl: `https://t.me/${channel.username}/${msg.externalId}`,
+          mediaUrls: msg.mediaUrls,
+          extracted,
+        });
+
+        if (outcome === "new") inserted += 1;
+        else if (outcome === "duplicate") duplicates += 1;
+        else skipped += 1;
+      }
+    } catch (err) {
+      failed += 1;
+      const errMsg = err instanceof Error ? err.message : String(err);
+      // Truncate very long errors (Drizzle wraps the full SQL + params
+      // in .message; we only want the readable head).
+      const short = errMsg.length > 160 ? errMsg.slice(0, 160) + "…" : errMsg;
+      if (!firstError) {
+        firstError = `@${channel.username}/${msg.externalId}: ${short}`;
+      }
+      console.error(
+        `[ingest] post @${channel.username}/${msg.externalId} failed:`,
+        errMsg,
+      );
+      try {
+        await db
+          .update(rawTelegramPosts)
+          .set({ processingStatus: "failed" })
+          .where(
+            and(
+              eq(rawTelegramPosts.telegramChannelId, channel.id),
+              eq(rawTelegramPosts.telegramMessageId, msg.externalId),
+            ),
+          );
+      } catch {
+        // If even the status update fails (e.g. raw_post never got
+        // inserted because upsertRawPost was what threw), there's
+        // nothing more we can do — move on.
+      }
     }
-
-    const outcome = await materializeListing({
-      channelId: channel.id,
-      channelUsername: channel.username,
-      messageId: msg.externalId,
-      rawPostId: rawRow.id,
-      categoryId: cat!.id,
-      publishedAt: msg.postedAt,
-      originalPostUrl: `https://t.me/${channel.username}/${msg.externalId}`,
-      mediaUrls: msg.mediaUrls,
-      extracted,
-    });
-
-    if (outcome === "new") inserted += 1;
-    else if (outcome === "duplicate") duplicates += 1;
-    else skipped += 1;
 
     // Heartbeat. Touches updatedAt so the channels table can show
     // "stalled" for any sync whose updatedAt hasn't moved in a while,
@@ -158,11 +205,15 @@ export async function ingestChannel(opts: {
     // as a status line while running — gets cleared to null on success).
     processed += 1;
     if (processed % 5 === 0 || processed === messages.length) {
+      const status =
+        failed > 0
+          ? `Processed ${processed}/${messages.length} (${failed} failed)`
+          : `Processed ${processed}/${messages.length}`;
       await db
         .update(telegramChannels)
         .set({
           lastSyncStatus: "running",
-          lastSyncError: `Processed ${processed}/${messages.length}`,
+          lastSyncError: status,
           updatedAt: new Date(),
         })
         .where(eq(telegramChannels.id, channel.id));
@@ -180,17 +231,28 @@ export async function ingestChannel(opts: {
   // which is impossible to inflate (unique index on
   // channel_id + message_id). The stored accumulator was prone to
   // drift across re-syncs and the resurrect flow.
+  // Status: "ok" when nothing failed; "error" if every post failed
+  // (something systemic broke); otherwise "ok" with a non-null
+  // lastSyncError carrying the count + sample. The admin UI already
+  // renders lastSyncError as a yellow warning chip when present even
+  // if status="ok", so partial-failure runs are visually distinct
+  // from clean runs without being treated as full failures.
+  const allFailed = messages.length > 0 && failed === messages.length;
+  const summary =
+    failed > 0
+      ? `${failed}/${messages.length} posts failed${firstError ? ` — first: ${firstError}` : ""}`
+      : null;
   await db
     .update(telegramChannels)
     .set({
       lastSyncedAt: new Date(),
-      lastSyncStatus: "ok",
-      lastSyncError: null,
+      lastSyncStatus: allFailed ? "error" : "ok",
+      lastSyncError: summary,
       updatedAt: new Date(),
     })
     .where(eq(telegramChannels.id, channel.id));
 
-  return { fetched: messages.length, inserted, duplicates, skipped };
+  return { fetched: messages.length, inserted, duplicates, skipped, failed };
 }
 
 async function upsertRawPost(channelId: string, msg: IngestionRawMessage) {
@@ -273,26 +335,51 @@ async function materializeListing(input: {
   const dedup = await findDuplicate(input.extracted);
 
   if (dedup.kind === "duplicate") {
-    // Attach as a new source to the canonical listing
-    await db.insert(listingSources).values({
-      listingId: dedup.canonicalListingId,
-      rawTelegramPostId: input.rawPostId,
-      telegramChannelId: input.channelId,
-      originalPostUrl: input.originalPostUrl,
-      publishedAt: input.publishedAt,
-    });
-    await db
-      .update(listings)
-      .set({
-        sourceCount: sql`${listings.sourceCount} + 1`,
-        updatedAt: new Date(),
+    // Attach as a new source to the canonical listing.
+    //
+    // .onConflictDoNothing on raw_telegram_post_id makes this insert
+    // idempotent. The guard above SHOULD prevent reaching this point
+    // for an already-attached raw_post, but a race window exists
+    // between the SELECT and this INSERT:
+    //   - User clicks "Run sync" twice rapidly for the same channel.
+    //   - Or: a manual sync overlaps with the auto-sync that fires
+    //     when a channel is added/resurrected.
+    //   - Two concurrent runs both pass the existence check for the
+    //     same raw_post_id, then both try to insert here — and the
+    //     second one violates UNIQUE(raw_post_id) and aborts the
+    //     entire sync (losing the inserted+duplicate counts from
+    //     earlier in the loop).
+    // ON CONFLICT silently no-ops in that race, and we use the
+    // returned rows to decide whether to bump source_count.
+    const inserted = await db
+      .insert(listingSources)
+      .values({
+        listingId: dedup.canonicalListingId,
+        rawTelegramPostId: input.rawPostId,
+        telegramChannelId: input.channelId,
+        originalPostUrl: input.originalPostUrl,
+        publishedAt: input.publishedAt,
       })
-      .where(eq(listings.id, dedup.canonicalListingId));
+      .onConflictDoNothing({ target: listingSources.rawTelegramPostId })
+      .returning({ id: listingSources.id });
+    if (inserted.length > 0) {
+      await db
+        .update(listings)
+        .set({
+          sourceCount: sql`${listings.sourceCount} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(eq(listings.id, dedup.canonicalListingId));
+    }
     await db
       .update(rawTelegramPosts)
       .set({ processingStatus: "processed" })
       .where(eq(rawTelegramPosts.id, input.rawPostId));
-    return "duplicate";
+    // If a concurrent sync won the race, the raw_post is still
+    // accounted for in the DB — just by the other run. From this
+    // run's perspective it was already-processed, so report "skipped"
+    // rather than double-counting it as a duplicate.
+    return inserted.length > 0 ? "duplicate" : "skipped";
   }
 
   // No duplicate → insert fresh.
@@ -362,13 +449,25 @@ async function materializeListing(input: {
     })
     .returning();
 
-  await db.insert(listingSources).values({
-    listingId: listingRow.id,
-    rawTelegramPostId: input.rawPostId,
-    telegramChannelId: input.channelId,
-    originalPostUrl: input.originalPostUrl,
-    publishedAt: input.publishedAt,
-  });
+  // Same idempotency story as the duplicate path: ON CONFLICT
+  // protects against the rare case where a parallel sync (manual +
+  // auto-trigger overlap) won the race to claim this raw_post for a
+  // different fresh listing. If that happens, the listing row we
+  // just inserted above is harmless orphan — sourceCount=1 but no
+  // listing_sources pointing to it — and it'll just sit there
+  // hidden from /listings (the listings query filters by EXISTS in
+  // listing_sources from active channels). Better than aborting
+  // the whole sync over an extremely unlikely race.
+  await db
+    .insert(listingSources)
+    .values({
+      listingId: listingRow.id,
+      rawTelegramPostId: input.rawPostId,
+      telegramChannelId: input.channelId,
+      originalPostUrl: input.originalPostUrl,
+      publishedAt: input.publishedAt,
+    })
+    .onConflictDoNothing({ target: listingSources.rawTelegramPostId });
 
   await db
     .update(rawTelegramPosts)
